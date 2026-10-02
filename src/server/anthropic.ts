@@ -60,7 +60,13 @@ export function registerAnthropic(app: Hono, deps: AnthropicDeps): void {
     const stream = body.stream === true;
 
     if (!stream) {
-      const r = await deps.runChat(userText);
+      let r: { replyText: string; messageId: string };
+      try {
+        r = await deps.runChat(userText);
+      } catch (e) {
+        const msg = e instanceof Error ? e.message : String(e);
+        return c.json({ error: { type: "service_unavailable", message: msg } }, 503);
+      }
       return c.json({
         id: `msg_${r.messageId}`,
         type: "message",

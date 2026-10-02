@@ -6,6 +6,7 @@ import { loadConfig } from "../config.js";
 import { logRequest } from "./middleware.js";
 import { registerOpenAI } from "./openai.js";
 import { registerAnthropic } from "./anthropic.js";
+import { runChat as realRunChat } from "./handler.js";
 
 export interface AppDeps {
   cfg?: Config;
@@ -14,8 +15,7 @@ export interface AppDeps {
 
 export function createApp(deps?: AppDeps): Hono {
   const cfg = deps?.cfg ?? loadConfig();
-  // ponytail: 503 thrower until Task 18 wires the real runChat
-  const runChat = deps?.runChat ?? (async (): Promise<never> => { throw new Error("runChat not wired yet"); });
+  const runChat = deps?.runChat ?? ((userText: string, onDelta?: (c: string) => void) => realRunChat(cfg, userText, onDelta));
   const app = new Hono();
   app.use("*", logRequest);
   app.get("/healthz", (c) => c.json({ ok: true }));
