@@ -60,7 +60,6 @@ async function getHtml(tls: TlsClient, path: string, cookieHeader: string): Prom
       userAgent: SHARED_HEADERS["User-Agent"],
       headers: {
         ...SHARED_HEADERS,
-        "Content-Type": "application/json",
         "Cookie": cookieHeader,
         "Referer": "https://muse.ai/",
       },
@@ -93,9 +92,11 @@ export async function bootstrap(opts: {
   if (!vmId || !gatewayUrl) {
     try {
       const lease = await postJson(tls, "/api/hatch/lease-vm", { vmType: "standard" }, cookieHeader);
-      if (lease["status"] === "assigned") {
-        gatewayUrl = lease["gatewayUrl"] as string;
-        vmId = lease["vmName"] as string;
+      if (lease["status"] === "assigned"
+          && typeof lease["gatewayUrl"] === "string"
+          && typeof lease["vmName"] === "string") {
+        gatewayUrl = lease["gatewayUrl"];
+        vmId = lease["vmName"];
       }
     } catch {
       // 403 expected if VM already assigned — fall through to HTML scrape
@@ -115,11 +116,15 @@ export async function bootstrap(opts: {
   await postJson(tls, "/api/hatch/vm/wake", { vm_id: vmId, retry_count: 0 }, cookieHeader);
 
   const tokenResp = await postJson(tls, "/api/hatch/token", { vmAddress: gatewayUrl, vmName: vmId }, cookieHeader);
-  if (typeof tokenResp["token"] !== "string") throw new Error("token response missing 'token'");
+  if (typeof tokenResp["token"] !== "string" || !tokenResp["token"].trim()) {
+    throw new Error("token response missing or empty 'token'");
+  }
   const authToken = tokenResp["token"];
 
   const notaryResp = await postJson(tls, "/api/hatch/noise-notary-token", { vmName: vmId }, cookieHeader);
-  if (typeof notaryResp["notaryToken"] !== "string") throw new Error("notary response missing 'notaryToken'");
+  if (typeof notaryResp["notaryToken"] !== "string" || !notaryResp["notaryToken"].trim()) {
+    throw new Error("notary response missing or empty 'notaryToken'");
+  }
   const notaryToken = notaryResp["notaryToken"].trim();
 
   const requestId = randomUUID();

@@ -1,10 +1,11 @@
 import { test } from "node:test";
 import assert from "node:assert/strict";
-import { mkdtempSync, writeFileSync } from "node:fs";
+import { mkdtempSync, writeFileSync, rmSync } from "node:fs";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
 import { scrapeVmFromHtml } from "../src/bootstrap/scrape-vm.js";
 import { loadCookies, toCookieHeader } from "../src/bootstrap/cookies.js";
+import { bootstrap } from "../src/bootstrap/session.js";
 
 test("scrapeVmFromHtml extracts UUID from activeGatewayUrl", () => {
   const html = `blah "activeGatewayUrl":"wss://3574599d-879f-4ffe-b294-61b50ba60c1a.metaaivm.com/" blah`;
@@ -42,4 +43,23 @@ test("loadCookies filters to muse.ai cookies only", () => {
 
 test("toCookieHeader joins key=value pairs", () => {
   assert.equal(toCookieHeader({ a: "1", b: "2" }), "a=1; b=2");
+});
+
+test("bootstrap throws if hatch_sess cookie missing", async () => {
+  const dir = mkdtempSync(join(tmpdir(), "muse-boot-"));
+  try {
+    const storagePath = join(dir, "storage_state.json");
+    writeFileSync(storagePath, JSON.stringify({
+      cookies: [
+        { name: "theme", value: "dark", domain: "muse.ai" },
+        { name: "wd", value: "1x1", domain: ".muse.ai" },
+      ],
+    }));
+    await assert.rejects(
+      () => bootstrap({ storageStatePath: storagePath, sessionPath: join(dir, "session.json") }),
+      /hatch_sess/,
+    );
+  } finally {
+    rmSync(dir, { recursive: true, force: true });
+  }
 });
