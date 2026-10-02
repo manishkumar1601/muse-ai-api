@@ -2,9 +2,11 @@ import { Hono } from "hono";
 import { serve } from "@hono/node-server";
 import { logger } from "../log.js";
 import type { Config } from "../config.js";
+import { logRequest } from "./middleware.js";
 
 export function createApp(): Hono {
   const app = new Hono();
+  app.use("*", logRequest);
   app.get("/healthz", (c) => c.json({ ok: true }));
   return app;
 }
