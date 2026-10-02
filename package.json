@@ -4,13 +4,15 @@
   "description": "OpenAI + Anthropic compatible proxy backed by muse.ai (Hatch) over Noise XX",
   "type": "module",
   "main": "index.ts",
-  "bin": { "muse-proxy": "./bin/muse-proxy" },
+  "bin": {
+    "muse-proxy": "./bin/muse-proxy"
+  },
   "scripts": {
-    "start":     "tsx index.ts",
-    "dev":       "tsx watch index.ts",
+    "start": "tsx index.ts",
+    "dev": "tsx watch index.ts",
     "bootstrap": "tsx src/cli/bootstrap.ts",
-    "build":     "tsc",
-    "test":      "node --test --import tsx tests/*.test.ts",
+    "build": "tsc",
+    "test": "node --test --import tsx tests/*.test.ts",
     "typecheck": "tsc --noEmit"
   },
   "license": "MIT",
@@ -21,6 +23,7 @@
     "@noble/curves": "^1.8.1",
     "@noble/hashes": "^1.7.1",
     "cycletls": "^1.0.27",
+    "form-data": "^4.0.6",
     "hono": "^4.7.11",
     "pino": "^9.6.0",
     "protobufjs": "^7.4.0",
