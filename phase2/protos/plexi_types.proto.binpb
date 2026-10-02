@@ -1,14 +1,0 @@
-
-plexi_types.protoplexi_core.types"
-Epoch
-inner ("…
-SignatureMessage
-ciphersuite (
-	namespace (	
-	timestamp (&
-epoch (2.plexi_core.types.Epoch
-digest ("k
-SignatureResponse3
-message (2".plexi_core.types.SignatureMessage
-	signature (
-key_id (

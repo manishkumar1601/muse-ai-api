@@ -1,7 +1,0 @@
-storage_state.json
-session.json
-cookies.json
-__pycache__/
-*.pyc
-.venv/
-venv/

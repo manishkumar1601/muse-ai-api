@@ -1,6 +1,0 @@
-chat_out.log
-events.json
-__pycache__/
-*.pyc
-.venv/
-venv/

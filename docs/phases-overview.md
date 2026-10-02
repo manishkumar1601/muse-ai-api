@@ -1,5 +1,22 @@
 # Phases overview — what each phase builds and why
 
+## Node port (02-10-2026)
+
+The project structure was migrated from the phase1–7 folder layout to a single Node.js project under `src/` with proper module boundaries:
+
+- `src/bootstrap/` — phase1 equivalent
+- `src/noise/` — phase2 equivalent (hand-rolled Noise XX on `@noble/*`)
+- `src/proto/` — protobuf loader + schemas (`.binpb` files copied from `phase2/protos/`)
+- `src/hatch/` — phase3+4+5 equivalent (HTTP-over-Noise client, chat flow)
+- `src/server/` — phase7 equivalent (Hono proxy, OpenAI + Anthropic routes)
+- `src/cli/` — CLI entries
+
+All business behavior is preserved. Python dependencies (dissononce, curl_cffi, FastAPI, uvicorn) were replaced with Node equivalents (hand-rolled Noise, cycletls, Hono). See `memory/02-10-2026-node-port.md` for the full swap list, gotchas, and decisions.
+
+For the historical phase-by-phase story — how each piece of the protocol was reverse-engineered — see `memory/*.md` and git history before commit `31bbda2`.
+
+---
+
 The repo is organized phase-by-phase to make it skimmable. Each phase has:
 - A single purpose
 - Its own README with run instructions
