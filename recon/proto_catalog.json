@@ -1,0 +1,75 @@
+{
+  "at": "2026-10-01T07:29:08.670Z",
+  "protoCatalog": [
+    {
+      "chunk": "2zxujh06i9lm7.js",
+      "proto": "google/protobuf/descriptor.proto",
+      "descriptorBytes": 19582
+    }
+  ],
+  "byProto": {
+    "google/protobuf/descriptor.proto": 1
+  },
+  "findings": [
+    {
+      "chunk": "2zxujh06i9lm7.js",
+      "size": 72278,
+      "protoCount": 1,
+      "protos": [
+        "google/protobuf/descriptor.proto"
+      ]
+    }
+  ],
+  "keyChunkStrings": {
+    "1w9duffuzanuc.js": [
+      "\"Noise_XX_25519_AESGCM_SHA256\"",
+      "\"/api/hatch/noise-notary-token\"",
+      "CipherState"
+    ],
+    "11qbbeqlkqufw.js": [
+      "\"hatch.chat\"",
+      "GatewayRequest"
+    ],
+    "2zxujh06i9lm7.js": [],
+    "24vdgjhlw22uj.js": [
+      "\"/api/hatch/token\"",
+      "\"/api/hatch/saved-spaces\"",
+      "\"hatch.metaaivm.com\"",
+      "\"hatch.vm.\"",
+      "\"hatch.onboarding.complete.seen.\"",
+      "\"hatch.onboarding.variant.\"",
+      "\"NOISE_WS_PATH\"",
+      "\"HATCH_SHARED_LB_HOST\"",
+      "\"HATCH_APP_ID\""
+    ],
+    "2b_2bs05jboin.js": [],
+    "03etoehba_onc.js": [],
+    "15p8upp-cymet.js": [],
+    "2o6_a0psi6u-x.js": [
+      "\"/api/hatch/vm/wake\"",
+      "GatewayRequest"
+    ],
+    "1dva5p6eh25ps.js": [
+      "\"/api/hatch/lease-vm\"",
+      "\"HATCH_BROWSER_TITLE\"",
+      "\"HATCH_DOCK_BOTTOM_UTILITY_RESERVED_HEIGHT\"",
+      "\"HATCH_DOCK_GLYPH_TO_SHAPE_ITEM_GAP\"",
+      "\"HATCH_DOCK_GLYPH_TO_SHAPE_ITEM_SIZE\"",
+      "\"HATCH_DOCK_LARGE_SYSTEM_BUTTON_SIZE\"",
+      "\"HATCH_DOCK_LARGE_SYSTEM_ICON_SIZE\"",
+      "\"HATCH_DOCK_LOADING_ARTIFACT_ROW_COUNT\"",
+      "\"HATCH_DOCK_LOADING_ITEM_COUNT\"",
+      "\"HATCH_DOCK_MAX_RECENTS_FILL\"",
+      "\"HATCH_DOCK_MIN_RECENTS\"",
+      "\"HATCH_DOCK_OVERFLOW_ICON_SIZE\"",
+      "\"HATCH_DOCK_PINNED_RECENTS_DIVIDER_HEIGHT\"",
+      "\"HATCH_DOCK_RAIL_WIDTH\"",
+      "\"HATCH_DOCK_REVEAL_STAGGER_MS\"",
+      "\"HATCH_DOCK_SIDE_CHATS_PANEL_MAX_WIDTH\"",
+      "\"HATCH_DOCK_SIDE_CHATS_PANEL_MIN_WIDTH\"",
+      "\"HATCH_DOCK_SIDE_CHATS_PANEL_WIDTH\"",
+      "\"HATCH_DOCK_TOP_SECTION_HEIGHT\"",
+      "\"HATCH_SHELL_NAV_INSET_CSS_VAR\""
+    ]
+  }
+}

@@ -1,0 +1,31 @@
+# Secrets — session cookies, auth tokens, decrypted frames
+**/session.json
+**/storage_state.json
+**/cookies.json
+**/events.json
+**/chat_out.log
+
+# Phase 2 raw recorded Noise frames
+**/frames/
+
+# Phase 3 per-sweep output
+**/sweep_out/
+
+# Phase 2 extracted schemas re-render output (regenerable)
+**/schemas/
+
+# Python
+__pycache__/
+*.pyc
+.venv/
+venv/
+*.egg-info/
+.pytest_cache/
+.mypy_cache/
+
+# IDE
+.vscode/
+.idea/
+
+# Local probe files
+**/probes.json

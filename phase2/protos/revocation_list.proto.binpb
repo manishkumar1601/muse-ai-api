@@ -1,0 +1,18 @@
+
+revocation_list.protorevocation_list"e
+RevokedArtifact
+namespace_name (	
+digest (
+context (	
+revoked_timestamp ("R
+RevokedArtifactList;
+revoked_artifacts (2 .revocation_list.RevokedArtifact"Ê
+RevocationListL
+revocation_list (23.revocation_list.RevocationList.RevocationListEntry
+nonce ([
+RevocationListEntry
+key (	3
+value (2$.revocation_list.RevokedArtifactList:8"k
+SerializedRevocationList8
+revocation_list (2.revocation_list.RevocationList
+serialized_rl (B¢WAPB

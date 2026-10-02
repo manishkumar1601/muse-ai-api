@@ -1,0 +1,5 @@
+fastapi>=0.111
+uvicorn[standard]>=0.30
+curl_cffi>=0.7
+dissononce>=0.34
+protobuf>=4.25

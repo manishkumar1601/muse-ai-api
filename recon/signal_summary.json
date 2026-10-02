@@ -1,0 +1,852 @@
+{
+  "at": "2026-10-01T07:28:13.530Z",
+  "chunks": 210,
+  "errors": 0,
+  "hit_chunks": 66,
+  "bySignal": {
+    "ChatMessage": {
+      "count": 27,
+      "file_count": 27,
+      "files": [
+        "1wb9oguaf6zgi.js",
+        "19nu09co0bef5.js",
+        "2lji3t4-yf800.js",
+        "0drjrcpfop_go.js",
+        "07r-s-vdt7ruk.js",
+        "017abwasx9vt4.js",
+        "2hm34iw8_f45q.js",
+        "2ta-7i-johmkt.js",
+        "24tkufm-gsm64.js",
+        "14m82lj3plq2w.js",
+        "1jnp90dz8ro5e.js",
+        "3ldf45a9kpxb9.js",
+        "1uz6bhvxy7tld.js",
+        "2ja6vufsefsb4.js",
+        "0siw7beb4rcpg.js",
+        "159u__yf_8qd9.js",
+        "3lxht6o66ldze.js",
+        "3hf7ro-25mp0n.js",
+        "0fekq84uxglkk.js",
+        "0_7bpqbwkog60.js",
+        "12dmko7okoa9o.js",
+        "049m7xlg1n7y-.js",
+        "0rx3sk-auxax-.js",
+        "2hki98-ywawc0.js",
+        "1b-agx2veg5n4.js",
+        "06rm2igg6x2f8.js",
+        "17lww1eijz1r-.js"
+      ]
+    },
+    "GatewayRequest": {
+      "count": 25,
+      "file_count": 25,
+      "files": [
+        "2-2gmuzb39rox.js",
+        "26lmoqowomnxi.js",
+        "11qbbeqlkqufw.js",
+        "2o6_a0psi6u-x.js",
+        "2n2seqybej7im.js",
+        "355mcr-n0rgdr.js",
+        "06sds8txigaek.js",
+        "1xpv1pt17ix_u.js",
+        "26y_ext8ncrsc.js",
+        "2ybidf7eo5h2x.js",
+        "2hm34iw8_f45q.js",
+        "1mt4mimnb_3ea.js",
+        "1lgia_yf4qvo1.js",
+        "2ta-7i-johmkt.js",
+        "1m24dpcdsuhrt.js",
+        "2np0mze9n8r3o.js",
+        "0vvm_cubiia8u.js",
+        "3veds91cuk-m7.js",
+        "28-f-6e51a3l_.js",
+        "049m7xlg1n7y-.js",
+        "3tjwjldvvo2_m.js",
+        "1653l4taff3lz.js",
+        "0x5xmaj6ylwws.js",
+        "3-_1wyvlwhmxs.js",
+        "1ikccyrrq3hgn.js"
+      ]
+    },
+    "sha256": {
+      "count": 5,
+      "file_count": 5,
+      "files": [
+        "0h1y2r2my7bvv.js",
+        "355mcr-n0rgdr.js",
+        "319gpjpkcixs-.js",
+        "3veds91cuk-m7.js",
+        "1fbc0j-jazgim.js"
+      ]
+    },
+    "AssistantMessage": {
+      "count": 5,
+      "file_count": 5,
+      "files": [
+        "2lji3t4-yf800.js",
+        "2z-uixml_j6px.js",
+        "0siw7beb4rcpg.js",
+        "38b_lyw6-zsbb.js",
+        "159u__yf_8qd9.js"
+      ]
+    },
+    "UserMessage": {
+      "count": 5,
+      "file_count": 5,
+      "files": [
+        "2z-uixml_j6px.js",
+        "2ta-7i-johmkt.js",
+        "0siw7beb4rcpg.js",
+        "38b_lyw6-zsbb.js",
+        "3lxht6o66ldze.js"
+      ]
+    },
+    "metaaivm.com": {
+      "count": 3,
+      "file_count": 3,
+      "files": [
+        "0gal1f9yk86-o.js",
+        "2lji3t4-yf800.js",
+        "24vdgjhlw22uj.js"
+      ]
+    },
+    "notary_token": {
+      "count": 3,
+      "file_count": 3,
+      "files": [
+        "1d7k5o86hwm28.js",
+        "24vdgjhlw22uj.js",
+        "1w9duffuzanuc.js"
+      ]
+    },
+    "X25519": {
+      "count": 3,
+      "file_count": 3,
+      "files": [
+        "11qbbeqlkqufw.js",
+        "2b_2bs05jboin.js",
+        "1w9duffuzanuc.js"
+      ]
+    },
+    "notaryToken": {
+      "count": 3,
+      "file_count": 3,
+      "files": [
+        "11qbbeqlkqufw.js",
+        "24vdgjhlw22uj.js",
+        "1w9duffuzanuc.js"
+      ]
+    },
+    "SendMessage": {
+      "count": 3,
+      "file_count": 3,
+      "files": [
+        "0siw7beb4rcpg.js",
+        "159u__yf_8qd9.js",
+        "0fekq84uxglkk.js"
+      ]
+    },
+    ".proto": {
+      "count": 2,
+      "file_count": 2,
+      "files": [
+        "2zxujh06i9lm7.js",
+        "1dva5p6eh25ps.js"
+      ]
+    },
+    "/api/hatch/invite": {
+      "count": 2,
+      "file_count": 2,
+      "files": [
+        "0lptuij2-pwhk.js",
+        "0vvm_cubiia8u.js"
+      ]
+    },
+    "Ed25519": {
+      "count": 2,
+      "file_count": 2,
+      "files": [
+        "03etoehba_onc.js",
+        "15p8upp-cymet.js"
+      ]
+    },
+    "/api/hatch/vesta": {
+      "count": 1,
+      "file_count": 1,
+      "files": [
+        "2pmh4s18lh9k0.js"
+      ]
+    },
+    "noise_handshake": {
+      "count": 1,
+      "file_count": 1,
+      "files": [
+        "11qbbeqlkqufw.js"
+      ]
+    },
+    "noise-handshake": {
+      "count": 1,
+      "file_count": 1,
+      "files": [
+        "11qbbeqlkqufw.js"
+      ]
+    },
+    "google.protobuf": {
+      "count": 1,
+      "file_count": 1,
+      "files": [
+        "2zxujh06i9lm7.js"
+      ]
+    },
+    "hatch.metaaivm.com": {
+      "count": 1,
+      "file_count": 1,
+      "files": [
+        "24vdgjhlw22uj.js"
+      ]
+    },
+    "/v1/noise": {
+      "count": 1,
+      "file_count": 1,
+      "files": [
+        "24vdgjhlw22uj.js"
+      ]
+    },
+    "/api/hatch/token": {
+      "count": 1,
+      "file_count": 1,
+      "files": [
+        "24vdgjhlw22uj.js"
+      ]
+    },
+    "/api/hatch/saved": {
+      "count": 1,
+      "file_count": 1,
+      "files": [
+        "24vdgjhlw22uj.js"
+      ]
+    },
+    "Noise_XX_25519_AESGCM_SHA256": {
+      "count": 1,
+      "file_count": 1,
+      "files": [
+        "1w9duffuzanuc.js"
+      ]
+    },
+    "x25519": {
+      "count": 1,
+      "file_count": 1,
+      "files": [
+        "1w9duffuzanuc.js"
+      ]
+    },
+    "/api/hatch/noise": {
+      "count": 1,
+      "file_count": 1,
+      "files": [
+        "1w9duffuzanuc.js"
+      ]
+    },
+    "libsodium": {
+      "count": 1,
+      "file_count": 1,
+      "files": [
+        "1w9duffuzanuc.js"
+      ]
+    },
+    "/api/hatch/vm/wake": {
+      "count": 1,
+      "file_count": 1,
+      "files": [
+        "2o6_a0psi6u-x.js"
+      ]
+    },
+    "/api/hatch/lease": {
+      "count": 1,
+      "file_count": 1,
+      "files": [
+        "1dva5p6eh25ps.js"
+      ]
+    },
+    "/api/hatch/promotion": {
+      "count": 1,
+      "file_count": 1,
+      "files": [
+        "0lptuij2-pwhk.js"
+      ]
+    },
+    "/api/hatch/app": {
+      "count": 1,
+      "file_count": 1,
+      "files": [
+        "0lptuij2-pwhk.js"
+      ]
+    },
+    "/api/hatch/cloudflare": {
+      "count": 1,
+      "file_count": 1,
+      "files": [
+        "1mt4mimnb_3ea.js"
+      ]
+    },
+    "/api/hatch/private": {
+      "count": 1,
+      "file_count": 1,
+      "files": [
+        "1mt4mimnb_3ea.js"
+      ]
+    },
+    "/api/hatch/cvm": {
+      "count": 1,
+      "file_count": 1,
+      "files": [
+        "1mt4mimnb_3ea.js"
+      ]
+    },
+    "/api/hatch/voice/voyager": {
+      "count": 1,
+      "file_count": 1,
+      "files": [
+        "2ta-7i-johmkt.js"
+      ]
+    },
+    "/api/hatch/voice/speech": {
+      "count": 1,
+      "file_count": 1,
+      "files": [
+        "2ta-7i-johmkt.js"
+      ]
+    },
+    "sha512": {
+      "count": 1,
+      "file_count": 1,
+      "files": [
+        "319gpjpkcixs-.js"
+      ]
+    },
+    "/api/hatch/voice/tts/stream": {
+      "count": 1,
+      "file_count": 1,
+      "files": [
+        "2cx4hqrr_eyfk.js"
+      ]
+    },
+    "/api/hatch/voice/tts": {
+      "count": 1,
+      "file_count": 1,
+      "files": [
+        "2cx4hqrr_eyfk.js"
+      ]
+    }
+  },
+  "file_hits": [
+    {
+      "url": "2pmh4s18lh9k0.js",
+      "size": 72679,
+      "matches": [
+        "/api/hatch/vesta"
+      ]
+    },
+    {
+      "url": "0gal1f9yk86-o.js",
+      "size": 24226,
+      "matches": [
+        "metaaivm.com"
+      ]
+    },
+    {
+      "url": "1d7k5o86hwm28.js",
+      "size": 20897,
+      "matches": [
+        "notary_token"
+      ]
+    },
+    {
+      "url": "1wb9oguaf6zgi.js",
+      "size": 19753,
+      "matches": [
+        "ChatMessage"
+      ]
+    },
+    {
+      "url": "19nu09co0bef5.js",
+      "size": 53010,
+      "matches": [
+        "ChatMessage"
+      ]
+    },
+    {
+      "url": "2-2gmuzb39rox.js",
+      "size": 32914,
+      "matches": [
+        "GatewayRequest"
+      ]
+    },
+    {
+      "url": "26lmoqowomnxi.js",
+      "size": 30322,
+      "matches": [
+        "GatewayRequest"
+      ]
+    },
+    {
+      "url": "0h1y2r2my7bvv.js",
+      "size": 51482,
+      "matches": [
+        "sha256"
+      ]
+    },
+    {
+      "url": "2lji3t4-yf800.js",
+      "size": 34416,
+      "matches": [
+        "metaaivm.com",
+        "ChatMessage",
+        "AssistantMessage"
+      ]
+    },
+    {
+      "url": "11qbbeqlkqufw.js",
+      "size": 61646,
+      "matches": [
+        "noise_handshake",
+        "noise-handshake",
+        "X25519",
+        "notaryToken",
+        "GatewayRequest"
+      ]
+    },
+    {
+      "url": "0drjrcpfop_go.js",
+      "size": 72199,
+      "matches": [
+        "ChatMessage"
+      ]
+    },
+    {
+      "url": "2zxujh06i9lm7.js",
+      "size": 72278,
+      "matches": [
+        "google.protobuf",
+        ".proto"
+      ]
+    },
+    {
+      "url": "24vdgjhlw22uj.js",
+      "size": 38135,
+      "matches": [
+        "hatch.metaaivm.com",
+        "metaaivm.com",
+        "/v1/noise",
+        "/api/hatch/token",
+        "/api/hatch/saved",
+        "notaryToken",
+        "notary_token"
+      ]
+    },
+    {
+      "url": "2b_2bs05jboin.js",
+      "size": 44471,
+      "matches": [
+        "X25519"
+      ]
+    },
+    {
+      "url": "1w9duffuzanuc.js",
+      "size": 34911,
+      "matches": [
+        "Noise_XX_25519_AESGCM_SHA256",
+        "X25519",
+        "x25519",
+        "/api/hatch/noise",
+        "notaryToken",
+        "notary_token",
+        "libsodium"
+      ]
+    },
+    {
+      "url": "2o6_a0psi6u-x.js",
+      "size": 35320,
+      "matches": [
+        "/api/hatch/vm/wake",
+        "GatewayRequest"
+      ]
+    },
+    {
+      "url": "07r-s-vdt7ruk.js",
+      "size": 91869,
+      "matches": [
+        "ChatMessage"
+      ]
+    },
+    {
+      "url": "1dva5p6eh25ps.js",
+      "size": 54279,
+      "matches": [
+        "/api/hatch/lease",
+        ".proto"
+      ]
+    },
+    {
+      "url": "2n2seqybej7im.js",
+      "size": 37155,
+      "matches": [
+        "GatewayRequest"
+      ]
+    },
+    {
+      "url": "355mcr-n0rgdr.js",
+      "size": 26013,
+      "matches": [
+        "sha256",
+        "GatewayRequest"
+      ]
+    },
+    {
+      "url": "06sds8txigaek.js",
+      "size": 35299,
+      "matches": [
+        "GatewayRequest"
+      ]
+    },
+    {
+      "url": "1xpv1pt17ix_u.js",
+      "size": 65190,
+      "matches": [
+        "GatewayRequest"
+      ]
+    },
+    {
+      "url": "017abwasx9vt4.js",
+      "size": 31577,
+      "matches": [
+        "ChatMessage"
+      ]
+    },
+    {
+      "url": "26y_ext8ncrsc.js",
+      "size": 24539,
+      "matches": [
+        "GatewayRequest"
+      ]
+    },
+    {
+      "url": "2ybidf7eo5h2x.js",
+      "size": 49114,
+      "matches": [
+        "GatewayRequest"
+      ]
+    },
+    {
+      "url": "2hm34iw8_f45q.js",
+      "size": 184219,
+      "matches": [
+        "GatewayRequest",
+        "ChatMessage"
+      ]
+    },
+    {
+      "url": "0lptuij2-pwhk.js",
+      "size": 111774,
+      "matches": [
+        "/api/hatch/promotion",
+        "/api/hatch/app",
+        "/api/hatch/invite"
+      ]
+    },
+    {
+      "url": "1mt4mimnb_3ea.js",
+      "size": 94627,
+      "matches": [
+        "/api/hatch/cloudflare",
+        "/api/hatch/private",
+        "/api/hatch/cvm",
+        "GatewayRequest"
+      ]
+    },
+    {
+      "url": "1lgia_yf4qvo1.js",
+      "size": 33600,
+      "matches": [
+        "GatewayRequest"
+      ]
+    },
+    {
+      "url": "2z-uixml_j6px.js",
+      "size": 59732,
+      "matches": [
+        "UserMessage",
+        "AssistantMessage"
+      ]
+    },
+    {
+      "url": "2ta-7i-johmkt.js",
+      "size": 448366,
+      "matches": [
+        "/api/hatch/voice/voyager",
+        "/api/hatch/voice/speech",
+        "ChatMessage",
+        "GatewayRequest",
+        "UserMessage"
+      ]
+    },
+    {
+      "url": "1m24dpcdsuhrt.js",
+      "size": 86476,
+      "matches": [
+        "GatewayRequest"
+      ]
+    },
+    {
+      "url": "03etoehba_onc.js",
+      "size": 34676,
+      "matches": [
+        "Ed25519"
+      ]
+    },
+    {
+      "url": "319gpjpkcixs-.js",
+      "size": 379337,
+      "matches": [
+        "sha256",
+        "sha512"
+      ]
+    },
+    {
+      "url": "15p8upp-cymet.js",
+      "size": 13556,
+      "matches": [
+        "Ed25519"
+      ]
+    },
+    {
+      "url": "24tkufm-gsm64.js",
+      "size": 24642,
+      "matches": [
+        "ChatMessage"
+      ]
+    },
+    {
+      "url": "14m82lj3plq2w.js",
+      "size": 25063,
+      "matches": [
+        "ChatMessage"
+      ]
+    },
+    {
+      "url": "2np0mze9n8r3o.js",
+      "size": 24884,
+      "matches": [
+        "GatewayRequest"
+      ]
+    },
+    {
+      "url": "1jnp90dz8ro5e.js",
+      "size": 28399,
+      "matches": [
+        "ChatMessage"
+      ]
+    },
+    {
+      "url": "2cx4hqrr_eyfk.js",
+      "size": 37085,
+      "matches": [
+        "/api/hatch/voice/tts/stream",
+        "/api/hatch/voice/tts"
+      ]
+    },
+    {
+      "url": "3ldf45a9kpxb9.js",
+      "size": 35629,
+      "matches": [
+        "ChatMessage"
+      ]
+    },
+    {
+      "url": "0vvm_cubiia8u.js",
+      "size": 38432,
+      "matches": [
+        "/api/hatch/invite",
+        "GatewayRequest"
+      ]
+    },
+    {
+      "url": "1uz6bhvxy7tld.js",
+      "size": 32338,
+      "matches": [
+        "ChatMessage"
+      ]
+    },
+    {
+      "url": "2ja6vufsefsb4.js",
+      "size": 39370,
+      "matches": [
+        "ChatMessage"
+      ]
+    },
+    {
+      "url": "3veds91cuk-m7.js",
+      "size": 100521,
+      "matches": [
+        "sha256",
+        "GatewayRequest"
+      ]
+    },
+    {
+      "url": "0siw7beb4rcpg.js",
+      "size": 139365,
+      "matches": [
+        "ChatMessage",
+        "UserMessage",
+        "SendMessage",
+        "AssistantMessage"
+      ]
+    },
+    {
+      "url": "38b_lyw6-zsbb.js",
+      "size": 56237,
+      "matches": [
+        "AssistantMessage",
+        "UserMessage"
+      ]
+    },
+    {
+      "url": "159u__yf_8qd9.js",
+      "size": 47783,
+      "matches": [
+        "AssistantMessage",
+        "SendMessage",
+        "ChatMessage"
+      ]
+    },
+    {
+      "url": "3lxht6o66ldze.js",
+      "size": 51155,
+      "matches": [
+        "UserMessage",
+        "ChatMessage"
+      ]
+    },
+    {
+      "url": "3hf7ro-25mp0n.js",
+      "size": 33151,
+      "matches": [
+        "ChatMessage"
+      ]
+    },
+    {
+      "url": "28-f-6e51a3l_.js",
+      "size": 37244,
+      "matches": [
+        "GatewayRequest"
+      ]
+    },
+    {
+      "url": "0fekq84uxglkk.js",
+      "size": 73258,
+      "matches": [
+        "ChatMessage",
+        "SendMessage"
+      ]
+    },
+    {
+      "url": "0_7bpqbwkog60.js",
+      "size": 51931,
+      "matches": [
+        "ChatMessage"
+      ]
+    },
+    {
+      "url": "12dmko7okoa9o.js",
+      "size": 42204,
+      "matches": [
+        "ChatMessage"
+      ]
+    },
+    {
+      "url": "049m7xlg1n7y-.js",
+      "size": 38553,
+      "matches": [
+        "GatewayRequest",
+        "ChatMessage"
+      ]
+    },
+    {
+      "url": "3tjwjldvvo2_m.js",
+      "size": 49468,
+      "matches": [
+        "GatewayRequest"
+      ]
+    },
+    {
+      "url": "0rx3sk-auxax-.js",
+      "size": 47505,
+      "matches": [
+        "ChatMessage"
+      ]
+    },
+    {
+      "url": "1653l4taff3lz.js",
+      "size": 26364,
+      "matches": [
+        "GatewayRequest"
+      ]
+    },
+    {
+      "url": "1fbc0j-jazgim.js",
+      "size": 56711,
+      "matches": [
+        "sha256"
+      ]
+    },
+    {
+      "url": "2hki98-ywawc0.js",
+      "size": 62847,
+      "matches": [
+        "ChatMessage"
+      ]
+    },
+    {
+      "url": "1b-agx2veg5n4.js",
+      "size": 47637,
+      "matches": [
+        "ChatMessage"
+      ]
+    },
+    {
+      "url": "0x5xmaj6ylwws.js",
+      "size": 139090,
+      "matches": [
+        "GatewayRequest"
+      ]
+    },
+    {
+      "url": "3-_1wyvlwhmxs.js",
+      "size": 54070,
+      "matches": [
+        "GatewayRequest"
+      ]
+    },
+    {
+      "url": "06rm2igg6x2f8.js",
+      "size": 70390,
+      "matches": [
+        "ChatMessage"
+      ]
+    },
+    {
+      "url": "17lww1eijz1r-.js",
+      "size": 53789,
+      "matches": [
+        "ChatMessage"
+      ]
+    },
+    {
+      "url": "1ikccyrrq3hgn.js",
+      "size": 61149,
+      "matches": [
+        "GatewayRequest"
+      ]
+    }
+  ]
+}
