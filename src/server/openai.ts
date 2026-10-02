@@ -27,7 +27,13 @@ export function registerOpenAI(app: Hono, deps: OpenAIDeps): void {
     const deny = requireAuth(c, cfg.proxyKey);
     if (deny) return deny;
 
-    const body = await c.req.json<{ model?: string; messages: ChatMessage[]; stream?: boolean }>();
+    let body: { model?: string; messages?: ChatMessage[]; stream?: boolean };
+    try {
+      body = await c.req.json();
+    } catch {
+      return c.json({ error: { type: "invalid_request", message: "invalid JSON body" } }, 400);
+    }
+
     const userText = flattenMessages(body.messages ?? []);
     if (!userText.trim()) {
       return c.json({ error: { type: "invalid_request", message: "no non-empty user message" } }, 400);
@@ -62,7 +68,10 @@ export function registerOpenAI(app: Hono, deps: OpenAIDeps): void {
       let done = false;
       let onPush: (() => void) | null = null;
       const push = (t: string) => { queue.push(t); onPush?.(); };
-      const run = deps.runChat(userText, push).then(() => { done = true; onPush?.(); });
+      let runError: Error | null = null;
+      const run = deps.runChat(userText, push)
+        .catch((e: unknown) => { runError = e instanceof Error ? e : new Error(String(e)); })
+        .finally(() => { done = true; onPush?.(); });
 
       while (!done || queue.length > 0) {
         while (queue.length > 0) {
@@ -73,10 +82,22 @@ export function registerOpenAI(app: Hono, deps: OpenAIDeps): void {
           }) });
         }
         if (!done) {
-          await new Promise<void>((r) => { onPush = () => { onPush = null; r(); }; });
+          await new Promise<void>((resolve) => {
+            onPush = () => { onPush = null; resolve(); };
+            if (done || queue.length > 0) {
+              onPush?.();
+            }
+          });
         }
       }
       await run;
+
+      if (runError) {
+        await s.writeSSE({ data: JSON.stringify({
+          id, object: "chat.completion.chunk", created, model,
+          choices: [{ index: 0, delta: {}, finish_reason: "error" }],
+        }) as any });
+      }
 
       await s.writeSSE({ data: JSON.stringify({
         id, object: "chat.completion.chunk", created, model,
