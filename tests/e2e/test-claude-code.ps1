@@ -1,0 +1,8 @@
+$env:ANTHROPIC_BASE_URL             = "http://127.0.0.1:8787"
+$env:ANTHROPIC_AUTH_TOKEN           = "e2e-test"
+$env:ANTHROPIC_MODEL                = "muse-spark"
+$env:ANTHROPIC_DEFAULT_OPUS_MODEL   = "muse-spark"
+$env:ANTHROPIC_DEFAULT_SONNET_MODEL = "muse-spark"
+$env:ANTHROPIC_DEFAULT_HAIKU_MODEL  = "muse-spark"
+$env:CLAUDE_CODE_SUBAGENT_MODEL     = "muse-spark"
+"" | claude -p "reply with exactly: node-port-claude-ok"
