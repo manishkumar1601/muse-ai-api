@@ -15,18 +15,28 @@ Lets you call the Muse Spark model (and the agent behind it) from any OpenAI or 
 ## What's in here
 
 ```
-recon/     phase 0 — JS chunks, grep catalogs, decoded protobuf descriptors
-phase1/    bootstrap.py       — cookies -> session.json with ws_url
-phase2/    handshake.py       — Noise XX handshake + frame recorder
-           extract_protos.py  — pull FileDescriptorProto blobs from the JS bundle
-phase3/    decode_descriptors.py + probe.py + sweep.py
+README.md             you are here
+docs/                 reference — architecture, wire protocol, API, compat, troubleshooting
+memory/               dated session logs — the "why" behind every design decision
+recon/                phase 0 — JS chunks, grep catalogs, decoded protobuf descriptors
+phase1/   bootstrap.py       — cookies -> session.json with ws_url
+phase2/   handshake.py       — Noise XX handshake + frame recorder
+          extract_protos.py  — pull FileDescriptorProto blobs from the JS bundle
+          protos/            — 5 extracted .binpb FileDescriptorProto files
+phase3/   decode_descriptors.py + probe.py + sweep.py
                               — HTTP-over-Noise route discovery (~15 live DAEMON endpoints)
-phase4/    chat.py            — send human chat message, assemble streamed reply
-phase7/    server.py          — FastAPI proxy: OpenAI /v1/chat/completions + Anthropic /v1/messages
+phase4/   chat.py            — send human chat message, assemble streamed reply
+phase7/   server.py          — FastAPI proxy: OpenAI /v1/chat/completions + Anthropic /v1/messages
                                 (stream + non-stream), auto-refresh session on failure
 ```
 
-Each phase has its own README with runnable commands, discovered facts, and gotchas.
+Each phase has its own README with runnable commands. For the big picture:
+
+- **Just want to use it?** → [docs/phases-overview.md](docs/phases-overview.md) → [docs/anthropic-compat.md](docs/anthropic-compat.md) or [docs/openai-compat.md](docs/openai-compat.md).
+- **Want to understand how it works?** → [docs/architecture.md](docs/architecture.md) → [docs/wire-protocol.md](docs/wire-protocol.md) → [docs/request-flow.md](docs/request-flow.md) → [docs/api-reference.md](docs/api-reference.md).
+- **Want to extend it?** → [docs/development.md](docs/development.md) + the relevant [memory/](memory/) entry.
+- **Something broken?** → [docs/troubleshooting.md](docs/troubleshooting.md).
+- **Want the story of how this got built?** → [memory/README.md](memory/README.md) walks through all 7 phases chronologically.
 
 ## Quick start
 
