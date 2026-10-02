@@ -1,6 +1,6 @@
 import protobuf from "protobufjs";
 import { type Root } from "protobufjs";
-import { readFileSync, readdirSync } from "node:fs";
+import { readFileSync, readdirSync, existsSync } from "node:fs";
 import { fileURLToPath } from "node:url";
 import { dirname, join } from "node:path";
 
@@ -22,6 +22,9 @@ let cached: Root | null = null;
 
 export function loadSchemas(): Root {
   if (cached) return cached;
+  if (!existsSync(SCHEMA_DIR)) {
+    throw new Error(`Proto schema dir missing: ${SCHEMA_DIR} — did git clone finish?`);
+  }
   const files = readdirSync(SCHEMA_DIR).filter((f) => f.endsWith(".binpb")).sort();
   const descriptors = files.map((f) =>
     FileDescriptorProto.decode(readFileSync(join(SCHEMA_DIR, f)))

@@ -21,7 +21,8 @@ test("loadSchemas resolves ApplicationRequest", () => {
   // proto field names are snake_case (end_body, not endBody)
   const msg = T.create({ verb: "GET", path: "/x", end_body: true });
   const bytes = T.encode(msg).finish();
-  const decoded = T.toObject(T.decode(bytes), { longs: Number }) as unknown as { verb: string; path: string; endBody: boolean };
+  const decoded = T.toObject(T.decode(bytes), { longs: Number }) as unknown as { verb: string; path: string; end_body: boolean };
   assert.equal(decoded.verb, "GET");
   assert.equal(decoded.path, "/x");
+  assert.equal(decoded.end_body, true);
 });
