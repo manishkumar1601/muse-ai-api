@@ -29,3 +29,10 @@ venv/
 
 # Local probe files
 **/probes.json
+
+# Node
+node_modules/
+dist/
+.env
+*.tsbuildinfo
+logs/
