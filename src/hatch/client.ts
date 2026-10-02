@@ -222,6 +222,18 @@ export class HatchClient {
     if (!asm) {
       asm = { chunks: new Map(), total };
       this._assemblies.set(chunkId, asm);
+      // ponytail: cap at 128 in-flight chunk assemblies, drop oldest half if exceeded.
+      // Each incomplete assembly costs memory; a leak here was flagged in final review.
+      if (this._assemblies.size > 128) {
+        logger.warn({ size: this._assemblies.size }, "chunk-assembly map exceeded cap; clearing stale entries");
+        const toDelete: number[] = [];
+        let n = 0;
+        for (const k of this._assemblies.keys()) {
+          if (n++ >= this._assemblies.size / 2) break;
+          toDelete.push(k);
+        }
+        for (const k of toDelete) this._assemblies.delete(k);
+      }
     }
     asm.chunks.set(chunkIndex, payload);
     if (asm.chunks.size < asm.total) return null;
@@ -244,7 +256,7 @@ export class HatchClient {
       return null;
     }
 
-    const streamId = BigInt(Number(sf.stream_id ?? 0));
+    const streamId = BigInt(sf.stream_id ?? 0);
 
     // Dispatch on which oneof field is populated.
     if (sf.reset) {

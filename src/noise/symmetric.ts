@@ -1,13 +1,7 @@
 import { sha256 } from "@noble/hashes/sha256";
 import { hmac } from "@noble/hashes/hmac";
 import { CipherState } from "./cipher.js";
-
-function concat(a: Uint8Array, b: Uint8Array): Uint8Array {
-  const r = new Uint8Array(a.length + b.length);
-  r.set(a);
-  r.set(b, a.length);
-  return r;
-}
+import { concat } from "./util.js";
 
 function hkdf(ck: Uint8Array, ikm: Uint8Array): [Uint8Array, Uint8Array] {
   const tempKey = hmac(sha256, ck, ikm);

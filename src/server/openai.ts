@@ -5,6 +5,7 @@ import type { Config } from "../config.js";
 import { requireAuth } from "./auth.js";
 import { flattenMessages } from "./common.js";
 import type { ChatMessage } from "./common.js";
+import { logger } from "../log.js";
 
 export interface OpenAIDeps {
   cfg: Config;
@@ -98,11 +99,17 @@ export function registerOpenAI(app: Hono, deps: OpenAIDeps): void {
       }
       await run;
 
-      if (runError) {
+      if (runError !== null) {
+        // Emit an error chunk before the stop chunk so informed clients can detect it.
+        // finish_reason stays "stop" for OpenAI-client compatibility (not "error").
+        // ponytail: explicit !== null because TS CFA narrows the closure-assigned var to never with just if(runError).
+        const errMsg = (runError as Error).message;
         await s.writeSSE({ data: JSON.stringify({
           id, object: "chat.completion.chunk", created, model,
-          choices: [{ index: 0, delta: {}, finish_reason: "error" }],
-        }) as any });
+          error: { type: "server_error", message: errMsg },
+          choices: [{ index: 0, delta: {} }],
+        }) });
+        logger.warn({ err: errMsg }, "openai stream: runChat error");
       }
 
       await s.writeSSE({ data: JSON.stringify({

@@ -1,15 +1,9 @@
 import { SymmetricState } from "./symmetric.js";
 import { type KeyPair, generateKeyPair, dh } from "./curve.js";
 import { type CipherState } from "./cipher.js";
+import { concat } from "./util.js";
 
 const PROTOCOL = "Noise_XX_25519_AESGCM_SHA256";
-
-function concat(a: Uint8Array, b: Uint8Array): Uint8Array {
-  const r = new Uint8Array(a.length + b.length);
-  r.set(a);
-  r.set(b, a.length);
-  return r;
-}
 
 export class XxInitiator {
   private readonly ss: SymmetricState;
