@@ -1,6 +1,7 @@
 import { Hono } from "hono";
 import { serve } from "@hono/node-server";
 import { logger } from "../log.js";
+import type { Config } from "../config.js";
 
 export function createApp(): Hono {
   const app = new Hono();
@@ -8,9 +9,9 @@ export function createApp(): Hono {
   return app;
 }
 
-export async function start(host: string, port: number): Promise<() => Promise<void>> {
+export async function start(cfg: Config): Promise<() => Promise<void>> {
   const app = createApp();
-  const server = serve({ fetch: app.fetch, hostname: host, port });
-  logger.info({ host, port }, "listening");
+  const server = serve({ fetch: app.fetch, hostname: cfg.host, port: cfg.port });
+  logger.info({ host: cfg.host, port: cfg.port }, "listening");
   return () => new Promise((resolve) => server.close(() => resolve()));
 }
