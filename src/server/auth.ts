@@ -7,7 +7,7 @@ export function requireAuth(c: Context, key: string | undefined): Response | und
     ? auth.slice(7).trim()
     : c.req.header("x-api-key")?.trim();
   if (presented !== key) {
-    return c.json({ error: { type: "auth", message: "invalid api key" } }, 401) as unknown as Response;
+    return c.json({ error: { type: "auth", message: "invalid api key" } }, 401);
   }
   return undefined;
 }

@@ -14,7 +14,3 @@ export function flattenMessages(messages: ChatMessage[]): string {
   }
   return out.join("\n\n");
 }
-
-export function jsonError(status: 400 | 401 | 500 | 502 | 503, code: string, message: string) {
-  return { error: { type: code, message } };
-}
