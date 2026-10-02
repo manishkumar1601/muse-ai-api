@@ -5,6 +5,7 @@ import type { Config } from "../config.js";
 import { loadConfig } from "../config.js";
 import { logRequest } from "./middleware.js";
 import { registerOpenAI } from "./openai.js";
+import { registerAnthropic } from "./anthropic.js";
 
 export interface AppDeps {
   cfg?: Config;
@@ -19,6 +20,7 @@ export function createApp(deps?: AppDeps): Hono {
   app.use("*", logRequest);
   app.get("/healthz", (c) => c.json({ ok: true }));
   registerOpenAI(app, { cfg, runChat });
+  registerAnthropic(app, { cfg, runChat });
   return app;
 }
 
