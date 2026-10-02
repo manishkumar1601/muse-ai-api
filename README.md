@@ -26,6 +26,7 @@ phase2/   handshake.py       — Noise XX handshake + frame recorder
 phase3/   decode_descriptors.py + probe.py + sweep.py
                               — HTTP-over-Noise route discovery (~15 live DAEMON endpoints)
 phase4/   chat.py            — send human chat message, assemble streamed reply
+phase5/   (no code — Phase 5 extended phase4/chat.py in place; see phase5/README.md)
 phase7/   server.py          — FastAPI proxy: OpenAI /v1/chat/completions + Anthropic /v1/messages
                                 (stream + non-stream), auto-refresh session on failure
 ```
