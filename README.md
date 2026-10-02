@@ -93,6 +93,10 @@ python -m uvicorn phase7.server:app --app-dir phase7 --host 127.0.0.1 --port 878
 - Need `POST /client/register-capabilities` BEFORE `POST /chat/subscribe` and use the same `client_id` as `node_id` in `/chat/stream`, otherwise server routes pushed events to another registered client (e.g. your open browser tab).
 - When finding minified paths fails, monkey-patch `crypto.subtle.encrypt` via Playwright `page.addInitScript` and search the hex log for an ASCII marker you type into the real UI. It will give you the plaintext of every outgoing Noise frame.
 
+## License
+
+MIT — [LICENSE](LICENSE). Free and open for every use: personal, commercial, modification, redistribution, sublicensing, academic. No warranty.
+
 ## Credits
 
 Nothing novel — the pieces (Noise, protobuf, FastAPI, dissononce, curl_cffi) are all off the shelf. The work was figuring out which pieces to glue together and in what order.
