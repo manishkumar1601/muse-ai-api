@@ -70,7 +70,7 @@ export class XxInitiator {
       bytes: concat(encS, encPayload),
       split: { send: c1, recv: c2 },
       remoteStatic: this.rs,
-      handshakeHash: this.ss.h,
+      handshakeHash: this.ss.h.slice(), // ponytail: snapshot — ss.h mutates after split in some impls
     };
   }
 }
