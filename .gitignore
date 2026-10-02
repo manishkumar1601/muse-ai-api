@@ -12,7 +12,8 @@
 **/sweep_out/
 
 # Phase 2 extracted schemas re-render output (regenerable)
-**/schemas/
+phase2/schemas/
+recon/schemas/
 
 # Python
 __pycache__/
