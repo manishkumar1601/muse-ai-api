@@ -24,11 +24,15 @@ The repo is organized phase-by-phase to make it skimmable. Each phase has:
 
 ## Phase 0 — Recon (`recon/`)
 
+**Historical** — this phase existed in the Python layout; the captured JS chunks and `.binpb` descriptors it produced live on unchanged under `recon/`. No direct `src/` equivalent.
+
 Figure out whether a web2api proxy is even possible. Browse the live muse.ai, grep the compiled JS bundles, decide on a crypto suite, map the bootstrap endpoints. Deliverables: 9 captured JS chunks, grep catalogs, Phase 0 report.
 
 Verdict: possible. Noise XX, standard primitives, server-attested handshake.
 
 ## Phase 1 — Bootstrap (`phase1/`)
+
+**Historical** — this phase existed in the Python layout; code is now in `src/bootstrap/`.
 
 HTTP cookie → `session.json` with a ready-to-use Noise WS URL. Four POST calls on muse.ai with the user's session cookies.
 
@@ -38,6 +42,8 @@ Output: `phase1/session.json` with `vm_id`, `gateway_url`, `auth_token`, `notary
 
 ## Phase 2 — Noise handshake + frame recorder (`phase2/`)
 
+**Historical** — this phase existed in the Python layout; code is now in `src/noise/`.
+
 Open the Noise WS, do the 3-message XX handshake, split cipher states, record every decrypted frame.
 
 Hardest part: msg1 payload shape (32-byte CSPRNG nonce in protobuf field 1 — not empty). Server idle-closes if no immediate first encrypted frame post-handshake; we send a 16-byte empty kick.
@@ -45,6 +51,8 @@ Hardest part: msg1 payload shape (32-byte CSPRNG nonce in protobuf field 1 — n
 Output: a working Noise channel + 5 extracted FileDescriptorProto schemas.
 
 ## Phase 3 — HTTP-over-Noise + route discovery (`phase3/`)
+
+**Historical** — this phase existed in the Python layout; the proto decode logic is now in `src/proto/`, and the route-sweep script has a Node equivalent.
 
 Decode the extracted protos. Discover: **the transport is HTTP semantics in protobuf.** `ServiceFrame.ApplicationRequest` carries verb/path/headers/body. Sweep probes to enumerate 15+ live DAEMON endpoints.
 
@@ -54,6 +62,8 @@ Output: a known-good list of HTTP endpoints the Hatch VM exposes.
 
 ## Phase 4 — Send human chat messages (`phase4/`)
 
+**Historical** — this phase existed in the Python layout; code is now in `src/hatch/client.ts` and `src/hatch/chat.ts`.
+
 Discover the human-chat endpoint. Phase 3's `POST /chat/send` with `kind=action` worked but the server explicitly said "requires kind=action" meaning `kind=user` is on a different route.
 
 Hardest part: path literals are minified beyond grep. Solved by monkey-patching `crypto.subtle.encrypt` via `page.addInitScript` and searching the hex log for an ASCII marker typed into the real UI.
@@ -61,6 +71,8 @@ Hardest part: path literals are minified beyond grep. Solved by monkey-patching 
 Discovery: `POST /chat/stream` (not `GET`) with body `{message, node_id, capabilities, timezone}`.
 
 ## Phase 5 — Streaming reply (part of `phase4/chat.py` final version)
+
+**Historical** — this phase existed in the Python layout; code is now in `src/hatch/chat.ts` (`sendAndCollectReply`).
 
 Phase 4's send got a sync ack but the streamed assistant tokens went to the browser, not us. Phase 5 finds the subscribe mechanism.
 
@@ -72,13 +84,17 @@ Output: `phase4/chat.py` can now take a user prompt and return the agent's full 
 
 ## Phase 6 — (merged into Phase 7)
 
+**Historical** — this phase existed in the Python layout; the retry/rebootstrap logic is now in `src/server/handler.ts`.
+
 Was going to be "production hardening" (reconnect / token refresh / threading). Scope-reduced to a single feature: Phase 7's server auto-reruns `bootstrap.py` once on first `HatchClient` failure.
 
 Rest of Phase 6 (connection pooling, cancel-on-disconnect, real token counts) deliberately skipped — add when a real user complains.
 
 ## Phase 7 — OpenAI + Anthropic compat proxy (`phase7/`)
 
-FastAPI server exposing both OpenAI (`/v1/chat/completions`) and Anthropic (`/v1/messages`) wire formats, stream + non-stream. Each request opens a fresh Noise session, runs the Phase 5 chat flow, formats the reply in the client's native shape.
+**Historical** — this phase existed in the Python layout; code is now in `src/server/` (Hono + @hono/node-server replaces FastAPI + uvicorn).
+
+Hono server exposing both OpenAI (`/v1/chat/completions`) and Anthropic (`/v1/messages`) wire formats, stream + non-stream. Each request opens a fresh Noise session, runs the Phase 5 chat flow, formats the reply in the client's native shape.
 
 Hardest part: Claude Code integration. Had to add `/v1/messages/count_tokens` stub and ServiceRequest chunking (Claude Code sends 50-200KB system prompt + MCP tools context, exceeds Hatch's 65KB per-frame limit).
 

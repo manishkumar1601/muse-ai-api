@@ -23,13 +23,13 @@ Constants from the client bundle (`recon/chunks/24vdgjhlw22uj.js`):
 **Suite:** `Noise_XX_25519_AESGCM_SHA256` (from `recon/chunks/1w9duffuzanuc.js`, exact string).
 
 **Primitives:**
-- X25519 for Diffie-Hellman (browser uses libsodium; dissononce ships its own impl).
-- AES-GCM via WebCrypto (`crypto.subtle.encrypt({name:"AES-GCM", iv:..., additionalData:..., tagLength:128}, key, pt)`).
-- SHA-256 via WebCrypto.
+- X25519 for Diffie-Hellman (browser uses libsodium; our implementation uses `@noble/curves`).
+- AES-GCM via `@noble/ciphers` (`aes-gcm` with 12-byte IV: 4 zero bytes + 8-byte big-endian counter).
+- SHA-256 HKDF via `@noble/hashes`.
 
 **Pattern:** standard interactive XX (three messages: `-> e`, `<- e, ee, s, es`, `-> s, se`).
 
-**Nonce format for AES-GCM:** 4 zero bytes + 8-byte **big-endian** counter. Matches Noise AES-GCM spec; dissononce's `struct.pack('>Q', n)` is correct.
+**Nonce format for AES-GCM:** 4 zero bytes + 8-byte **big-endian** counter. Matches Noise AES-GCM spec.
 
 **Message sizes (observed):**
 | | Direction | Plaintext payload | Wire total |
@@ -42,17 +42,17 @@ Constants from the client bundle (`recon/chunks/24vdgjhlw22uj.js`):
 ```
 0a 20 <32 CSPRNG bytes>
 ```
-Protobuf field 1 (wire type 2, length-delimited), length 32, 32 random bytes. These 32 bytes are a "client freshness nonce" the server will echo back inside the msg2 attestation chain. Generated via `secrets.token_bytes(32)` in Python.
+Protobuf field 1 (wire type 2, length-delimited), length 32, 32 random bytes. These 32 bytes are a "client freshness nonce" the server will echo back inside the msg2 attestation chain. Generated via `randomBytes(32)` from Node's `crypto` module.
 
 **msg3 payload** = empty bytes for standard VMs. Confidential VMs (we don't support those) require a signed RV challenge response here.
 
-**After msg3:** `(cs_send, cs_recv) = hs.split()`. For an XX initiator, c1 (first returned) is the client's send cipher, c2 is the client's recv cipher. dissononce follows this.
+**After msg3:** `[csSend, csRecv] = hs.split()`. For an XX initiator, the first returned cipher is the client's send cipher, the second is the client's recv cipher. Implemented in `src/noise/handshake.ts`.
 
 ## 3. NoiseTransportFrame
 
 Every WS binary frame = exactly one AES-GCM ciphertext of one `NoiseTransportFrame` protobuf.
 
-Schema (`phase2/protos/noise_transport.proto.binpb`):
+Schema (`src/proto/schemas/noise_transport.proto.binpb`):
 ```protobuf
 message NoiseTransportFrame {
   optional int64  chunk_id     = 1;
@@ -65,7 +65,7 @@ message NoiseTransportFrame {
 Semantics:
 - `chunk_id` groups chunks that reassemble into one logical message. Client assigns; server echoes.
 - Multi-chunk messages: send `chunk_index 0..total_chunks-1` with the same `chunk_id`.
-- Our chunker splits at **48KB** (`MAX_CHUNK_PAYLOAD` in `phase4/chat.py`). Server limit is 65535B per frame.
+- Our chunker splits at **48KB** (`MAX_CHUNK_PAYLOAD` in `src/hatch/transport.ts`). Server limit is 65535B per frame.
 - Server-pushed events typically fit in one chunk (`total_chunks=1`).
 
 ## 4. ServiceRequest / ServiceResponse

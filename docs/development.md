@@ -4,17 +4,47 @@
 
 ```
 muse-ai-api/
-├── README.md            top-level entry point
+├── index.ts             entrypoint — starts the Hono server
+├── package.json
+├── tsconfig.json
 ├── .gitignore           secrets gate (session.json, storage_state.json, ...)
 ├── memory/              dated session logs (why things are the way they are)
 ├── docs/                reference (how things work, how to use)
 ├── recon/               phase 0 — captured JS chunks + descriptors + reports
-├── phase1/              bootstrap.py — HTTP cookie bootstrap
-├── phase2/              handshake.py + extract_protos.py
-│   └── protos/          5 extracted FileDescriptorProto .binpb files
-├── phase3/              decode_descriptors.py + probe.py + sweep.py
-├── phase4/              chat.py — HatchClient class + end-to-end chat flow
-└── phase7/              server.py — OpenAI + Anthropic compat FastAPI proxy
+└── src/
+    ├── config.ts        zod env validation, resolved once at startup
+    ├── log.ts           pino child-logger factory
+    ├── bootstrap/       session bootstrap (HTTP cookie → session.json)
+    │   ├── cookies.ts   Playwright storage_state loader
+    │   ├── scrape-vm.ts HTML scraper for activeGatewayUrl fallback
+    │   └── session.ts   four-POST bootstrap flow (cycletls)
+    ├── noise/           hand-rolled Noise XX (@noble/*)
+    │   ├── handshake.ts 3-message XX state machine
+    │   ├── cipher.ts    AES-GCM encrypt/decrypt
+    │   ├── curve.ts     X25519 DH helpers
+    │   ├── symmetric.ts MixHash / MixKey / HKDF
+    │   └── util.ts      concat / split helpers
+    ├── proto/           protobuf glue
+    │   ├── loader.ts    Root.fromDescriptor() over *.binpb files
+    │   ├── types.ts     hand-typed TS shapes for runtime-used messages
+    │   └── schemas/     5 FileDescriptorProto .binpb blobs
+    ├── hatch/           HTTP-over-Noise client + chat flow
+    │   ├── client.ts    HatchClient (connect, request, _recvOne, collectUntil)
+    │   ├── transport.ts NoiseTransportFrame encode/decode + 48KB chunker
+    │   ├── envelope.ts  ServiceRequest / ServiceFrame encode/decode
+    │   ├── chat.ts      sendAndCollectReply (register → subscribe → stream)
+    │   └── tls.ts       cycletls wrapper (getTls)
+    ├── server/          Hono proxy
+    │   ├── start.ts     server bootstrap, port binding
+    │   ├── handler.ts   shared HatchClient lifecycle + retry logic
+    │   ├── openai.ts    POST /v1/chat/completions + GET /v1/models
+    │   ├── anthropic.ts POST /v1/messages + POST /v1/messages/count_tokens
+    │   ├── auth.ts      MUSE_PROXY_KEY middleware
+    │   ├── middleware.ts request/response logging
+    │   ├── common.ts    shared response-shaping helpers
+    │   └── sse.ts       SSE helpers for streaming responses
+    └── cli/
+        └── bootstrap.ts CLI entry for `npm run bootstrap`
 ```
 
 ## Set up on a fresh machine
@@ -23,44 +53,41 @@ muse-ai-api/
 git clone git@github.com:manishkumar1601/muse-ai-api.git
 cd muse-ai-api
 
-python -m venv .venv
-.venv\Scripts\activate     # or source .venv/bin/activate
-
-pip install -r phase7/requirements.txt    # supersets all other phase deps
+npm install
 
 # One-time: dump your logged-in muse.ai cookies via Playwright
 # (or any tool that produces Playwright storage_state format)
-# Save to phase1/storage_state.json
+# Save to ./storage_state.json
 
-python phase1/bootstrap.py                # produces phase1/session.json
-python -m uvicorn phase7.server:app --app-dir phase7 --host 127.0.0.1 --port 8787
+npm run bootstrap        # produces ./session.json
+npm start                # starts proxy on 127.0.0.1:8787
 ```
 
 ## Adding a new DAEMON endpoint call
 
-1. Confirm the endpoint exists:
+1. Confirm the endpoint exists using the sweep script:
    ```powershell
-   Set-Content -Path phase3/probes.json -Value '[["DAEMON","GET","/your-path",null]]' -Encoding ascii
-   python phase3/sweep.py --probes phase3/probes.json --listen-seconds 10
+   Set-Content -Path probes.json -Value '[["DAEMON","GET","/your-path",null]]' -Encoding ascii
+   npm run sweep -- --probes probes.json --listen-seconds 10
    ```
 2. If 400, iterate on body shape — the server's error messages tell you what's missing.
-3. Add a method on `HatchClient` (or just call `client.request(verb, path, body)` directly).
-4. If large bodies (>65KB) might be sent, no extra work needed — `request()` already chunks.
+3. Add a method on `HatchClient` (or just call `client.request(verb, path, body)` directly from `src/hatch/client.ts`).
+4. If large bodies (>65KB) might be sent, no extra work needed — `request()` already chunks via `src/hatch/transport.ts`.
 
 ## Adding a new event type to the proxy
 
 Current proxy handles `delta.text_append` and `delta.message_done`. To surface more:
 
-1. Capture a session with `events.json` via `python phase4/chat.py --save-events out.json "test"`.
-2. Grep for event types: `jq -r '.[].event' out.json | sort -u`.
-3. In `phase7/server.py:_run_hatch` → add a branch in the event loop.
+1. Capture a session with event logging via `LOG_LEVEL=debug npm start` and inspect the pino output.
+2. Grep for event types in the debug output: look for `"event":` fields.
+3. In `src/hatch/chat.ts:sendAndCollectReply` → add a branch in the event-collection loop.
 4. For OpenAI SSE: encode as a `chat.completion.chunk` with your payload inside `delta`. For Anthropic SSE: use `content_block_delta` or a custom event name.
 
 ## Capturing fresh browser traffic (if things break)
 
-```python
-# From Playwright MCP or your own Playwright script:
-await page.addInitScript({ content: """
+```js
+// From Playwright MCP or your own Playwright script:
+await page.addInitScript({ content: `
 (() => {
   if (self.__cryptoPatched) return;
   self.__cryptoPatched = true;
@@ -88,7 +115,7 @@ await page.addInitScript({ content: """
     return r;
   };
 })();
-""" });
+` });
 ```
 
 Then in the browser DevTools: `copy(JSON.stringify(window.__cryptoLog))` and paste into a file. Each entry has the plaintext hex of one AES-GCM encrypt/decrypt call. Search by ASCII-marker-as-hex (`'HELLO' → '48454c4c4f'`) to find your test message.
@@ -99,40 +126,30 @@ If Meta changes the Noise or envelope protos:
 
 ```bash
 # Download all chunks (one-time; just needs the URLs saved from last run)
-# Then:
-python phase2/extract_protos.py --chunks recon/chunks --out phase2/protos
-python phase3/decode_descriptors.py           # regenerates docs/-grade .proto source
+# Then run the extraction script:
+node scripts/extract-protos.mjs --chunks recon/chunks --out src/proto/schemas
+
+# Verify the new binpb files load correctly:
+node -e "import('./src/proto/loader.js').then(m => m.loadPool()).then(() => console.log('ok'))"
 ```
 
-If a new `fileDesc("...")` form appears (different mangled call pattern), update the regex in `extract_protos.py:FILE_DESC_RE`.
+If a new `fileDesc("...")` form appears (different mangled call pattern), update the regex in `scripts/extract-protos.mjs`.
 
 ## Common debugging workflow
 
-1. **Enable server request logging** — already on by default in `phase7/server.py` middleware.
-2. **Save events to disk** — pass `--save-events events.json` to `phase4/chat.py` or add an equivalent in the proxy.
-3. **Hex-dump a decrypted frame** — in `phase4/chat.py:_recv_one`, add a `print(pt[:60].hex())` before parsing.
+1. **Enable verbose logging** — set `LOG_LEVEL=debug` before starting: `LOG_LEVEL=debug npm start`.
+2. **Inspect raw frames** — in `src/hatch/transport.ts:decodeFrame`, add a `log.debug({ hex: buf.slice(0,60).toString('hex') }, 'raw frame')`.
+3. **Hex-dump a decrypted frame** — in `src/noise/handshake.ts`, log `pt.slice(0,60).toString('hex')` before parsing.
 4. **Compare to the browser** — rerun the browser capture (above) and diff plaintexts.
 
-## Running the test probes
+## Running the tests
 
 ```bash
-# Phase 1 — unit test
-python phase1/bootstrap.py --self-check
+# Unit tests (no network — mocked)
+npm test
 
-# Phase 2 — Noise state math (no network)
-python phase2/handshake.py --self-check
-
-# Phase 2 — live handshake + record frames
-python phase2/handshake.py --listen-seconds 10
-
-# Phase 3 — HTTP route sweep
-python phase3/sweep.py --listen-seconds 15
-
-# Phase 4 — one chat round-trip
-python phase4/chat.py "hi" --listen-seconds 30
-
-# Phase 7 — server smoke test
-python -m uvicorn phase7.server:app --app-dir phase7 --port 8787 &
+# Server smoke test (requires session.json)
+npm start &
 curl -s http://127.0.0.1:8787/healthz
 curl -s http://127.0.0.1:8787/v1/models
 curl -s -X POST http://127.0.0.1:8787/v1/chat/completions \
@@ -142,16 +159,16 @@ curl -s -X POST http://127.0.0.1:8787/v1/chat/completions \
 
 ## Code style
 
-- No tests except per-script `--self-check` for pure functions. The whole project is a research dump.
-- Comments mostly explain _why_, not _what_. Non-obvious invariants get `# ponytail: ...` tags.
+- No test framework — `node --test` built-in runner with mocks. One test file per module.
+- Comments mostly explain _why_, not _what_. Non-obvious invariants get `// ponytail: ...` tags.
 - Default to simple over clever. If something looks over-engineered, it probably is — strip it back.
 
 ## When Meta ships an update
 
 Likely-first-to-break order (most → least fragile):
 1. Chunk-id naming / hashes in `/_next/static/chunks/*.js` — `recon/chunk_urls.txt` goes stale. Just re-fetch.
-2. Mangled identifiers in the JS — `extract_protos.py` regex may miss some. Update regex.
-3. Protobuf field numbers — would invalidate `phase2/protos/*.binpb`. Re-extract.
+2. Mangled identifiers in the JS — `scripts/extract-protos.mjs` regex may miss some. Update regex.
+3. Protobuf field numbers — would invalidate `src/proto/schemas/*.binpb`. Re-extract.
 4. `/chat/stream` request body shape — add a field, remove a field. Instrument crypto, grep marker, update body.
-5. The entire Noise suite / handshake pattern — unlikely but possible. Would require Phase 2 rewrite.
+5. The entire Noise suite / handshake pattern — unlikely but possible. Would require `src/noise/` rewrite.
 6. The HTTP-over-Noise envelope — unlikely; it's clearly their internal RPC standard.

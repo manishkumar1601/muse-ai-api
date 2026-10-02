@@ -18,6 +18,7 @@ Dated session logs — one file per phase or significant chunk of work. Not refe
 | [02-10-2026-phase-5-streaming-reply.md](02-10-2026-phase-5-streaming-reply.md) | 5 | `/chat/subscribe` + `/client/register-capabilities` → full streamed reply |
 | [02-10-2026-phase-7-openai-anthropic-proxy.md](02-10-2026-phase-7-openai-anthropic-proxy.md) | 7 | FastAPI proxy with both OpenAI and Anthropic wire formats |
 | [02-10-2026-claude-code-integration-test.md](02-10-2026-claude-code-integration-test.md) | 7 | Pointed Claude Code at the proxy. Had to add chunking + count_tokens stub |
+| [02-10-2026-node-port.md](02-10-2026-node-port.md) | — | Python → Node.js TypeScript port. Swap list, gotchas, 10 rulings, 27-commit history |
 
 ## How to use
 

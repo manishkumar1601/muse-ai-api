@@ -7,7 +7,7 @@
                                          │  HTTP (localhost)
                                          ▼
                              ┌─────────────────────────┐
-                             │  phase7 FastAPI proxy   │
+                             │  Hono proxy             │
                              │  /v1/chat/completions   │
                              │  /v1/messages           │
                              │  /v1/messages/count_tokens
@@ -15,7 +15,7 @@
                                          │  calls into
                                          ▼
                              ┌─────────────────────────┐
-                             │  phase4 HatchClient     │
+                             │  HatchClient            │
                              │  - fresh Noise XX       │
                              │  - register-caps        │
                              │  - subscribe            │
@@ -44,9 +44,9 @@
 
 ## Layers
 
-### 1. User-facing HTTP (phase7/server.py)
+### 1. User-facing HTTP (`src/server/start.ts`)
 
-Standard FastAPI. Two shape adapters:
+Standard Hono + @hono/node-server. Two shape adapters:
 
 - **OpenAI shape** — `POST /v1/chat/completions`. Flattens `messages[]` → one prompt. Returns either a single JSON `chat.completion` or an SSE stream of `chat.completion.chunk`s terminated by `data: [DONE]`.
 - **Anthropic shape** — `POST /v1/messages`. Same flattening. Returns either a single `message` JSON or SSE events matching Anthropic's `message_start / content_block_* / message_delta / message_stop` sequence.
@@ -54,32 +54,33 @@ Standard FastAPI. Two shape adapters:
 
 Auth: optional `MUSE_PROXY_KEY` env var checked against `Authorization: Bearer <key>` or `x-api-key: <key>`. Unset → open server (dev only).
 
-### 2. Hatch client (phase4/chat.py)
+### 2. Hatch client (`src/hatch/client.ts`)
 
 `HatchClient` opens one Noise WS per request. Methods:
-- `request(verb, path, body=None)` — fires one ApplicationRequest, returns the stream_id.
-- `_recv_one()` — pulls one assembled frame (handles both `response`/`body_chunk` streams and self-contained JSON events on subscribe streams).
-- `collect_until(pred, deadline_s)` — loop that keeps calling `_recv_one` until a predicate matches.
+- `request(verb, path, body?)` — fires one ApplicationRequest, returns the stream_id.
+- `_recvOne()` — pulls one assembled frame (handles both `response`/`body_chunk` streams and self-contained JSON events on subscribe streams).
+- `collectUntil(pred, deadlineMs)` — loop that keeps calling `_recvOne` until a predicate matches.
 
-`send_and_collect_reply(user_text, timezone, listen_seconds)` orchestrates the three-call sequence:
+`sendAndCollectReply(userText, timezone, listenMs)` orchestrates the three-call sequence:
 1. `POST /client/register-capabilities` with a fresh UUID.
 2. `POST /chat/subscribe`.
 3. `POST /chat/stream` with the user text + same UUID as `node_id`.
 4. Collect `delta.text_append` events until `delta.message_done`.
 
-Payloads larger than 48KB are automatically split across multiple NoiseTransportFrame chunks.
+Payloads larger than 48KB are automatically split across multiple NoiseTransportFrame chunks (see `src/hatch/transport.ts`).
 
-### 3. Noise transport
+### 3. Noise transport (`src/noise/`)
 
 - WebSocket to `wss://hatch.metaaivm.com/v1/noise?vm_id=&auth_token=&notary_token=&app_id=hatch-web&request_id=`.
-- 3-message Noise XX handshake (initiator), AES-GCM transport ciphers after split.
+- 3-message Noise XX handshake (initiator) — hand-rolled on `@noble/curves` (X25519), `@noble/ciphers` (AES-GCM), `@noble/hashes` (SHA-256 HKDF).
 - Each WS binary frame = one AES-GCM ciphertext of one `NoiseTransportFrame` protobuf.
+- The WS upgrade uses Node 22 `globalThis.WebSocket`; TLS fingerprinting for HTTP calls uses `cycletls` (see §5 below).
 
 ### 4. Hatch VM (server-side)
 
 Per-user VM at `<vm_id>.metaaivm.com`, fronted by the shared LB `hatch.metaaivm.com`. Runs a small internal HTTP router exposing JSON endpoints. The real agent (Muse Spark model + tools + memory) is behind the DAEMON service. SENTINEL/VAULT/AUTHD are support services only `/healthz`-reachable via noise.
 
-### 5. Bootstrap chain (phase1/bootstrap.py)
+### 5. Bootstrap chain (`src/bootstrap/`)
 
 Before the Noise WS can open, we need four HTTP POSTs on `muse.ai` with the user's session cookies:
 
@@ -90,13 +91,15 @@ Before the Noise WS can open, we need four HTTP POSTs on `muse.ai` with the user
 
 All four responses + a locally-generated request_id get combined into the final `wss://` URL.
 
+HTTP calls use `cycletls` for HTTP; the WS upgrade itself uses Node's native `globalThis.WebSocket`.
+
 ## Concurrency model
 
 Each incoming OpenAI/Anthropic request → one fresh Noise handshake → one send-and-collect round-trip. Handshake overhead ~500ms per request. Not pooled.
 
-The FastAPI event loop stays free: Hatch work runs in a thread via `loop.run_in_executor`. Streaming deltas get pushed through `loop.call_soon_threadsafe(queue.put_nowait, ...)` to the SSE generator.
+The Hono server is async-native. Hatch work runs inside an async flow with streaming deltas pushed through Node.js readable streams to the SSE generator.
 
 ## State
 
-- **Persistent across runs:** `~/.ssh/*` (your git keys), `phase1/storage_state.json` (your muse.ai cookies), `phase1/session.json` (last-bootstrapped tokens).
+- **Persistent across runs:** `~/.ssh/*` (your git keys), `./storage_state.json` (your muse.ai cookies), `./session.json` (last-bootstrapped tokens).
 - **Rebuilt per run:** everything else. Noise keys are per-handshake; stream_ids per-connection; the WS session itself is per-request.

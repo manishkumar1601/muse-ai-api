@@ -144,6 +144,6 @@ Standard OpenAI SSE. First chunk emits the role, subsequent chunks are content d
 | Tool | Works? | Notes |
 |---|---|---|
 | OpenAI Python SDK (`openai>=1.0`) | ✅ | stream + non-stream |
+| Node.js `openai` package | ✅ | stream + non-stream |
 | curl | ✅ | |
-| Node.js `openai` package | ✅ (expected, not tested here) | |
 | Continue.dev / Cursor / other IDE plugins | likely ✅ | basic OpenAI compat; sampling knobs will be ignored |

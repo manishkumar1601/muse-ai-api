@@ -1,12 +1,14 @@
 # API reference — discovered Hatch VM endpoints
 
-All of these are HTTP-over-Noise calls to `SERVICE_DAEMON` unless noted. Reach them from Python via:
+All of these are HTTP-over-Noise calls to `SERVICE_DAEMON` unless noted. Reach them from Node via:
 
-```python
-from phase4.chat import HatchClient
-client = HatchClient()
-sid = client.request("GET", "/healthz")   # or "POST", "/path", body={...}
-# consume with client._recv_one() / client.collect_until(pred, deadline_s)
+```ts
+import { HatchClient } from "./src/hatch/client.js";
+
+const client = new HatchClient({ sessionPath: "./session.json" });
+await client.connect();
+const sid = await client.request("GET", "/healthz");
+// consume with client._recvOne() / client.collectUntil(pred, deadlineMs)
 ```
 
 Everything returns a JSON envelope: `{"ok": bool, "result": ..., "error": {"code", "message"}}`. Non-200 statuses also return this envelope with `ok=false`.
@@ -15,7 +17,7 @@ Everything returns a JSON envelope: `{"ok": bool, "result": ..., "error": {"code
 
 ## Public muse.ai endpoints (NOT noise — plain HTTPS with cookies)
 
-Used by `phase1/bootstrap.py` to produce `session.json`.
+Used by `src/bootstrap/` to produce `session.json`.
 
 ### `POST /api/hatch/lease-vm`
 ```json
@@ -162,15 +164,15 @@ Only `/healthz` is reachable over noise. Everything else returns 403 `path not a
 
 ## Re-probing
 
-To check if routes have changed:
+To check if routes have changed, use the sweep script from `src/`:
+
 ```bash
-python phase3/sweep.py --listen-seconds 15
-cat phase3/sweep_out/<ts>/results.json
+npm run sweep -- --listen-seconds 15
 ```
 
 To probe a specific endpoint:
-```bash
+```powershell
 # PowerShell quoting of embedded JSON:
 Set-Content -Path probes.json -Value '[["DAEMON","GET","/your-path",null]]' -Encoding ascii
-python phase3/sweep.py --probes probes.json --listen-seconds 10
+npm run sweep -- --probes probes.json --listen-seconds 10
 ```
