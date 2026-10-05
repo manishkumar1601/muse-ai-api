@@ -190,7 +190,15 @@ async function sideChatSendAndPoll(
             const payload = (e["payload"] ?? {}) as Record<string, unknown>;
             if (payload["status"] !== undefined && payload["status"] !== "completed") continue;
             const text = e["display_text"] as string;
-            args.onDelta?.(text);
+            // Chunk into ~300-char deltas so Anthropic SSE emits multiple
+            // content_block_delta events — a single huge delta renders as
+            // only the first word in Claude Code.
+            if (args.onDelta) {
+              for (let i = 0; i < text.length; i += 300) {
+                args.onDelta(text.slice(i, i + 300));
+                await new Promise((r) => setTimeout(r, 5));
+              }
+            }
             return { replyText: text, messageId: ackMessageId, events: [] };
           }
         }

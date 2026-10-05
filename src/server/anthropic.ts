@@ -1,10 +1,17 @@
 import { randomUUID } from "node:crypto";
+import { appendFileSync } from "node:fs";
 import { streamSSE } from "hono/streaming";
 import type { Hono } from "hono";
 import type { Config } from "../config.js";
 import { requireAuth } from "./auth.js";
 import { flattenMessages, sessionKeyFromReq } from "./common.js";
 import type { ChatMessage } from "./common.js";
+
+const DEBUG = process.env["PROXY_DEBUG"] === "1";
+const dbg = (tag: string, data: unknown): void => {
+  if (!DEBUG) return;
+  try { appendFileSync("proxy-debug.log", `[${new Date().toISOString()}] ${tag}: ${JSON.stringify(data)}\n`); } catch { /* best-effort */ }
+};
 
 export interface AnthropicDeps {
   cfg: Config;
@@ -102,10 +109,15 @@ export function registerAnthropic(app: Hono, deps: AnthropicDeps): void {
         .finally(() => { done = true; onPush?.(); });
 
       let outputTokens = 0;
+      let totalLen = 0;
+      let chunkCount = 0;
       while (!done || queue.length > 0) {
         while (queue.length > 0) {
           const chunk = queue.shift()!;
           outputTokens += Math.ceil(chunk.length / 4);
+          totalLen += chunk.length;
+          chunkCount++;
+          dbg("delta", { len: chunk.length, preview: chunk.slice(0, 60) });
           await s.writeSSE({ event: "content_block_delta", data: JSON.stringify({
             type: "content_block_delta", index: 0, delta: { type: "text_delta", text: chunk },
           }) });
@@ -131,6 +143,7 @@ export function registerAnthropic(app: Hono, deps: AnthropicDeps): void {
         type: "message_delta", delta: { stop_reason: "end_turn", stop_sequence: null }, usage: { output_tokens: outputTokens },
       }) });
       await s.writeSSE({ event: "message_stop", data: JSON.stringify({ type: "message_stop" }) });
+      dbg("done", { totalLen, chunkCount, err: runError !== null ? (runError as Error).message : null });
     });
   });
 }
