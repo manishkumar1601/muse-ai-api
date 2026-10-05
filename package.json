@@ -11,6 +11,7 @@
     "start": "tsx index.ts",
     "dev": "tsx watch index.ts",
     "bootstrap": "tsx src/cli/bootstrap.ts",
+    "login": "tsx scripts/login.ts",
     "build": "tsc",
     "test": "node --test --import tsx tests/*.test.ts",
     "typecheck": "tsc --noEmit"
@@ -31,6 +32,7 @@
   },
   "devDependencies": {
     "@types/node": "^22.15.3",
+    "playwright": "^1.49.0",
     "tsx": "^4.19.3",
     "typescript": "^5.8.3"
   }
