@@ -1,5 +1,6 @@
 import { randomUUID } from "node:crypto";
 import type { HatchClient } from "./client.js";
+import type { ChatSessionState } from "./sessions.js";
 import { logger } from "../log.js";
 
 export const CAPABILITIES: readonly string[] = [
@@ -16,12 +17,15 @@ export interface SendAndCollectArgs {
   listenMs: number;
   onDelta?: (chunk: string) => void;
   clientId?: string;
+  sessionState?: ChatSessionState;
 }
 
 export interface SendAndCollectResult {
   replyText: string;
   messageId: string;
   events: Record<string, unknown>[];
+  sessionId?: string;
+  channel?: string;
 }
 
 export async function sendAndCollectReply(
@@ -55,16 +59,22 @@ export async function sendAndCollectReply(
 
   const sendStartMs = Date.now();
 
-  const sendSid = args.client.request("POST", "/chat/stream", {
+  const streamBody: Record<string, unknown> = {
     message: args.userText,
     node_id: clientId,
     capabilities: [...CAPABILITIES],
     timezone: args.timezone,
-  });
+  };
+  if (args.sessionState?.sessionId) streamBody["session_id"] = args.sessionState.sessionId;
+  if (args.sessionState?.channel) streamBody["channel"] = args.sessionState.channel;
+
+  const sendSid = args.client.request("POST", "/chat/stream", streamBody);
 
   const events: Record<string, unknown>[] = [];
   const textParts: string[] = [];
   let ackMessageId: string | undefined;
+  let ackSessionId: string | undefined;
+  let ackChannel: string | undefined;
   const deadline = Date.now() + args.listenMs;
 
   outer: while (Date.now() < deadline) {
@@ -81,8 +91,10 @@ export async function sendAndCollectReply(
     if (r.kind === "complete") {
       if (r.streamId === sendSid) {
         const body = r.body as Record<string, unknown>;
-        if (typeof body === "object" && body !== null && typeof body["message_id"] === "string") {
-          ackMessageId = body["message_id"] as string;
+        if (typeof body === "object" && body !== null) {
+          if (typeof body["message_id"] === "string") ackMessageId = body["message_id"] as string;
+          if (typeof body["session_id"] === "string") ackSessionId = body["session_id"] as string;
+          if (typeof body["channel"] === "string") ackChannel = body["channel"] as string;
         }
       }
       continue;
@@ -125,5 +137,7 @@ export async function sendAndCollectReply(
     replyText: textParts.join(""),
     messageId: ackMessageId ?? randomUUID(),
     events,
+    ...(ackSessionId !== undefined ? { sessionId: ackSessionId } : {}),
+    ...(ackChannel !== undefined ? { channel: ackChannel } : {}),
   };
 }

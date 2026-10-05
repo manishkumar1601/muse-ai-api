@@ -1,5 +1,15 @@
+import type { Context } from "hono";
+import { deriveSessionKey } from "../hatch/sessions.js";
+
 interface ContentBlock { type: string; text?: string; }
 export interface ChatMessage { role: string; content: string | ContentBlock[]; }
+
+export function sessionKeyFromReq(c: Context): string {
+  return deriveSessionKey({
+    xMuseSession: c.req.header("x-muse-session"),
+    authorization: c.req.header("authorization"),
+  });
+}
 
 export function flattenMessages(messages: ChatMessage[]): string {
   const out: string[] = [];

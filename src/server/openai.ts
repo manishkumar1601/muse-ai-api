@@ -3,13 +3,13 @@ import { streamSSE } from "hono/streaming";
 import type { Hono } from "hono";
 import type { Config } from "../config.js";
 import { requireAuth } from "./auth.js";
-import { flattenMessages } from "./common.js";
+import { flattenMessages, sessionKeyFromReq } from "./common.js";
 import type { ChatMessage } from "./common.js";
 import { logger } from "../log.js";
 
 export interface OpenAIDeps {
   cfg: Config;
-  runChat(userText: string, onDelta?: (chunk: string) => void): Promise<{ replyText: string; messageId: string }>;
+  runChat(userText: string, onDelta?: (chunk: string) => void, sessionKey?: string): Promise<{ replyText: string; messageId: string }>;
 }
 
 export function registerOpenAI(app: Hono, deps: OpenAIDeps): void {
@@ -42,11 +42,12 @@ export function registerOpenAI(app: Hono, deps: OpenAIDeps): void {
 
     const model = body.model ?? cfg.model;
     const stream = body.stream === true;
+    const sKey = sessionKeyFromReq(c);
 
     if (!stream) {
       let r: { replyText: string; messageId: string };
       try {
-        r = await deps.runChat(userText);
+        r = await deps.runChat(userText, undefined, sKey);
       } catch (e) {
         const msg = e instanceof Error ? e.message : String(e);
         return c.json({ error: { type: "service_unavailable", message: msg } }, 503);
@@ -76,7 +77,7 @@ export function registerOpenAI(app: Hono, deps: OpenAIDeps): void {
       let onPush: (() => void) | null = null;
       const push = (t: string) => { queue.push(t); onPush?.(); };
       let runError: Error | null = null;
-      const run = deps.runChat(userText, push)
+      const run = deps.runChat(userText, push, sKey)
         .catch((e: unknown) => { runError = e instanceof Error ? e : new Error(String(e)); })
         .finally(() => { done = true; onPush?.(); });
 

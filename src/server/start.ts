@@ -10,12 +10,12 @@ import { runChat as realRunChat } from "./handler.js";
 
 export interface AppDeps {
   cfg?: Config;
-  runChat?: (userText: string, onDelta?: (c: string) => void) => Promise<{ replyText: string; messageId: string }>;
+  runChat?: (userText: string, onDelta?: (c: string) => void, sessionKey?: string) => Promise<{ replyText: string; messageId: string }>;
 }
 
 export function createApp(deps?: AppDeps): Hono {
   const cfg = deps?.cfg ?? loadConfig();
-  const runChat = deps?.runChat ?? ((userText: string, onDelta?: (c: string) => void) => realRunChat(cfg, userText, onDelta));
+  const runChat = deps?.runChat ?? ((userText: string, onDelta?: (c: string) => void, sessionKey?: string) => realRunChat(cfg, userText, onDelta, sessionKey));
   const app = new Hono();
   app.use("*", logRequest);
   app.get("/healthz", (c) => c.json({ ok: true }));
