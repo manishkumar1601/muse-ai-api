@@ -47,9 +47,10 @@ async function postJson(
     "POST",
   );
   if (resp.status < 200 || resp.status >= 300) {
-    throw new Error(`POST ${path} → ${resp.status}: ${resp.body.slice(0, 200)}`);
+    const b = typeof resp.body === "string" ? resp.body : JSON.stringify(resp.body);
+    throw new Error(`POST ${path} → ${resp.status}: ${b.slice(0, 200)}`);
   }
-  return JSON.parse(resp.body) as Record<string, unknown>;
+  return (typeof resp.body === "string" ? JSON.parse(resp.body) : resp.body) as Record<string, unknown>;
 }
 
 async function getHtml(tls: TlsClient, path: string, cookieHeader: string): Promise<string> {

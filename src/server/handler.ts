@@ -21,7 +21,9 @@ export async function runChat(
   sessionKey: string = DEFAULT_SESSION_KEY,
 ): Promise<{ replyText: string; messageId: string }> {
   const tls = await getTls();
-  const state = chatSessions.get(sessionKey);
+  // The default key omits sessionState so it goes to the main chat
+  // (preserves pre-side-chat behavior for clients that don't opt in).
+  const state = sessionKey === DEFAULT_SESSION_KEY ? undefined : chatSessions.get(sessionKey);
   for (let attempt = 0; attempt < 2; attempt++) {
     try {
       const session = loadSession(cfg.sessionPath);
@@ -29,15 +31,9 @@ export async function runChat(
       try {
         const r = await sendAndCollectReply({
           client, userText, timezone: cfg.timezone, listenMs: 60_000,
-          sessionState: state,
+          ...(state !== undefined ? { sessionState: state } : {}),
           ...(onDelta !== undefined ? { onDelta } : {}),
         });
-        if (r.sessionId !== undefined || r.channel !== undefined) {
-          chatSessions.update(sessionKey, {
-            ...(r.sessionId !== undefined ? { sessionId: r.sessionId } : {}),
-            ...(r.channel !== undefined ? { channel: r.channel } : {}),
-          });
-        }
         return { replyText: r.replyText, messageId: r.messageId };
       } finally {
         await client.close();

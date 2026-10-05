@@ -94,6 +94,12 @@ export class HatchClient {
   // Per-stream body accumulator.
   private readonly _streamBodies = new Map<bigint, StreamBucket>();
 
+  // Streams for which the server has sent its first response frame.
+  // Lets callers wait for a long-lived subscribe to attach before firing dependent requests.
+  private readonly _responded = new Set<bigint>();
+
+  hasResponded(streamId: bigint): boolean { return this._responded.has(streamId); }
+
   // Inbound message queue drained by recvOne.
   private readonly _msgQueue: Uint8Array[] = [];
   private _wsCloseFlag = false;
@@ -278,6 +284,7 @@ export class HatchClient {
       }
       if (r.status !== undefined) b.status = r.status;
       if (r.body && r.body.length > 0) b.body.push(r.body);
+      this._responded.add(streamId);
       if (r.end_body) {
         const raw  = HatchClient._concat(b.body);
         this._streamBodies.delete(streamId);

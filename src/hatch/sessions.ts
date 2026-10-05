@@ -1,8 +1,10 @@
 import { createHash, randomUUID } from "node:crypto";
 
 export interface ChatSessionState {
-  sessionId?: string;
-  channel?: string;
+  // sessionId doubles as the muse.ai thread/side-chat identifier.
+  // Fresh UUID per API session; passing it into /chat/stream creates the
+  // thread on first use and routes to it on subsequent calls.
+  sessionId: string;
   nodeId: string;
   lastUsed: number;
 }
@@ -17,23 +19,14 @@ export class SessionStore {
   get(key: string): ChatSessionState {
     let s = this.map.get(key);
     if (s) {
-      // Re-insert so LRU eviction (insertion-order sweep) sees it as most-recent.
       this.map.delete(key);
     } else {
-      s = { nodeId: randomUUID(), lastUsed: Date.now() };
+      s = { sessionId: randomUUID(), nodeId: randomUUID(), lastUsed: Date.now() };
     }
     s.lastUsed = Date.now();
     this.map.set(key, s);
     this.sweep();
     return s;
-  }
-
-  update(key: string, patch: Partial<ChatSessionState>): void {
-    const s = this.map.get(key);
-    if (!s) return;
-    if (patch.sessionId !== undefined) s.sessionId = patch.sessionId;
-    if (patch.channel !== undefined) s.channel = patch.channel;
-    s.lastUsed = Date.now();
   }
 
   size(): number { return this.map.size; }

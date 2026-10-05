@@ -16,6 +16,7 @@ test("sendAndCollectReply assembles delta.text_append chunks", async () => {
 
   const mockClient = {
     request: () => { streamId++; return streamId; },
+    hasResponded: () => true,
     async recvOne() {
       const e = q.shift();
       if (!e) return "closed" as const;
@@ -48,6 +49,7 @@ test("sendAndCollectReply falls back to transcript when no delta.text_append", a
 
   const mockClient = {
     request: () => 1n,
+    hasResponded: () => true,
     async recvOne() {
       const e = q.shift();
       if (!e) return "closed" as const;
