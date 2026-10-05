@@ -7,7 +7,8 @@ import { requireAuth } from "./auth.js";
 import { flattenMessages, sessionKeyFromReq } from "./common.js";
 import type { ChatMessage } from "./common.js";
 
-const DEBUG = process.env["PROXY_DEBUG"] === "1";
+// Always on — set PROXY_DEBUG=0 to disable.
+const DEBUG = process.env["PROXY_DEBUG"] !== "0";
 const dbg = (tag: string, data: unknown): void => {
   if (!DEBUG) return;
   try { appendFileSync("proxy-debug.log", `[${new Date().toISOString()}] ${tag}: ${JSON.stringify(data)}\n`); } catch { /* best-effort */ }

@@ -1,7 +1,14 @@
 import { randomUUID } from "node:crypto";
+import { appendFileSync } from "node:fs";
 import type { HatchClient } from "./client.js";
 import type { ChatSessionState } from "./sessions.js";
 import { logger } from "../log.js";
+
+const DEBUG = process.env["PROXY_DEBUG"] !== "0";
+const dbg = (tag: string, data: unknown): void => {
+  if (!DEBUG) return;
+  try { appendFileSync("proxy-debug.log", `[${new Date().toISOString()}] chat.${tag}: ${JSON.stringify(data)}\n`); } catch {}
+};
 
 export const CAPABILITIES: readonly string[] = [
   "chat_cancel",
@@ -196,9 +203,8 @@ async function sideChatSendAndPoll(
         break;
       }
     }
+    dbg("poll", { len: currentText?.length ?? null, lastLen: lastText?.length ?? null, preview: currentText?.slice(0, 80) ?? null });
     if (currentText !== null) {
-      // Stream newly-grown bytes as they arrive — Claude Code shows progress
-      // instead of waiting silently for the whole reply.
       if (args.onDelta && currentText.length > emittedLen) {
         const fresh = currentText.slice(emittedLen);
         for (let i = 0; i < fresh.length; i += 300) {
@@ -208,6 +214,7 @@ async function sideChatSendAndPoll(
         emittedLen = currentText.length;
       }
       if (lastText === currentText && currentText.length > 0) {
+        dbg("stable", { len: currentText.length });
         return { replyText: currentText, messageId: ackMessageId, events: [] };
       }
       lastText = currentText;
