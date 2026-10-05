@@ -61,13 +61,25 @@ Auth: optional `MUSE_PROXY_KEY` env var checked against `Authorization: Bearer <
 - `_recvOne()` — pulls one assembled frame (handles both `response`/`body_chunk` streams and self-contained JSON events on subscribe streams).
 - `collectUntil(pred, deadlineMs)` — loop that keeps calling `_recvOne` until a predicate matches.
 
-`sendAndCollectReply(userText, timezone, listenMs)` orchestrates the three-call sequence:
-1. `POST /client/register-capabilities` with a fresh UUID.
-2. `POST /chat/subscribe`.
-3. `POST /chat/stream` with the user text + same UUID as `node_id`.
-4. Collect `delta.text_append` events until `delta.message_done`.
+`sendAndCollectReply(userText, timezone, listenMs, sessionState?)` orchestrates the sequence:
+1. `POST /api/nodes/register` with `node_id = sessionState.nodeId` (stable per API session). Required for side-chat event delivery.
+2. `POST /client/register-capabilities` with the same `nodeId` as `client_id`.
+3. `POST /chat/subscribe` — scoped (`session_id`) for side chats, global otherwise.
+4. `POST /chat/stream` with the user text + `session_id` for side chats.
+5. Collect `delta.text_append` events until `delta.message_done` / `message.assistant`.
+6. **Side-chat fallback:** if no deltas arrived (first-message race), `GET /chat/history?session_id=X` and extract the assistant reply.
 
 Payloads larger than 48KB are automatically split across multiple NoiseTransportFrame chunks (see `src/hatch/transport.ts`).
+
+### 2a. Per-session routing (`src/hatch/sessions.ts`)
+
+`SessionStore` maps API-session keys → `{sessionId, nodeId}` with 24h sliding TTL + LRU eviction. Session key derivation (`deriveSessionKey`):
+
+- `X-Muse-Session: <value>` header → `h:<value>` → dedicated side chat on muse.
+- else `Authorization: Bearer <token>` → `a:<sha256-16>` → dedicated per-API-key side chat.
+- else → `default` → shared main chat (no `session_id` sent, backward compatible).
+
+`sessionId` is a client-chosen UUID generated once per key; first `/chat/stream` with that id creates the side chat on muse, subsequent uses continue it.
 
 ### 3. Noise transport (`src/noise/`)
 

@@ -67,6 +67,7 @@ ANTHROPIC_MODEL=muse-spark  ANTHROPIC_DEFAULT_OPUS_MODEL=muse-spark
 - HTTP-over-Noise ServiceFrame transport, with per-request chunking across NoiseTransportFrames (~65 KB per frame limit).
 - 15+ live DAEMON HTTP endpoints discovered: `/healthz`, `/health` (big VM state blob), `/version`, `/feed`, `/ideas`, `/goals`, `/connectors`, `/model`, `/identity`, `/approvals`, `/chat/history`, `/chat/subscribe`, `/chat/stream`, …
 - Human-user chat: `POST /chat/stream` with proper subscribe+register preamble, streamed `delta.text_append` events reassembled into a final reply.
+- **Per-API-session side chats** — pass `X-Muse-Session: <any-string>` and the proxy creates a dedicated side chat on muse.ai for that key, continues it on subsequent calls, isolates history from other sessions. Omit the header → shared main chat (backward compatible). See [docs/architecture.md §2a](docs/architecture.md) and [memory/05-10-2026-side-chat-routing.md](memory/05-10-2026-side-chat-routing.md).
 - OpenAI `/v1/chat/completions` (stream + non-stream) and Anthropic `/v1/messages` (stream + non-stream) wire formats.
 - Automatic session re-bootstrap on first HatchClient open failure.
 

@@ -14,11 +14,17 @@ What happens, in order, when a user calls `POST /v1/chat/completions` on the pro
 POST http://127.0.0.1:8787/v1/chat/completions
 Content-Type: application/json
 Authorization: Bearer anything
+X-Muse-Session: alpha              # optional — routes to a dedicated side chat
 
 {"model":"muse-spark","messages":[{"role":"user","content":"hi"}]}
 ```
 
-Middleware logs `[req ] POST /v1/chat/completions`. Handler calls `extractUserText(messages)` → flattens to a single string.
+Middleware logs `[req ] POST /v1/chat/completions`. Handler calls `extractUserText(messages)` → flattens to a single string, derives `sessionKey` via `deriveSessionKey({xMuseSession, authorization})`:
+- `X-Muse-Session` header present → `h:<value>` (dedicated side chat on muse.ai)
+- else `Authorization` header → `a:<sha256-16>` of the bearer (dedicated per-API-key side chat)
+- else → `default` (shared main chat; backward compatible)
+
+The `SessionStore` (in-memory map, 24h sliding TTL, LRU eviction) issues a stable `{sessionId, nodeId}` per sessionKey. `sessionId` is a client-chosen UUID that first-use creates the side chat on muse; `nodeId` identifies our client across calls so muse routes replies back to us.
 
 ## 2. Fresh Noise session
 
@@ -38,39 +44,54 @@ If step (a) fails, `src/server/handler.ts` calls `src/bootstrap/session.ts` to r
 ## 3. Register as the push target
 
 ```ts
-await client.request("POST", "/client/register-capabilities", {
-    client_id: "<fresh uuid>", platform: "web",
+const nodeId = sessionState?.nodeId ?? randomUUID();
+
+client.request("POST", "/api/nodes/register", {
+    node_id: nodeId, display_name: "muse-proxy", platform: "windows",
+    commands_v2: { ping: { description: "Connection liveness check" } },
+});
+
+client.request("POST", "/client/register-capabilities", {
+    client_id: nodeId, platform: "web",
     display_name: "muse-proxy", version: "0.0.0",
     capabilities: { ...minimal },
 });
 ```
 
-Server-side: this binds the next `/chat/subscribe` on this Noise connection to the given `client_id`.
+Both registrations use the SAME `nodeId` (= `sessionState.nodeId` so it's stable across calls for the same API session). Without `/api/nodes/register`, side-chat events never route back to our connection.
 
 ## 4. Open the subscribe stream
 
 ```ts
-const subSid = await client.request("POST", "/chat/subscribe", {
+const subBody: Record<string, unknown> = {
     after_stream_seq: 0, after_chat_event_seq: 0,
     capabilities: ["chat_cancel", "delta_stream", "custom_reactions", ...],
-});
+};
+// Side chat: scope subscribe to the thread so replay captures its event history.
+if (sessionState?.sessionId) subBody.session_id = sessionState.sessionId;
+const subSid = client.request("POST", "/chat/subscribe", subBody);
 ```
 
-Server returns an immediate `response` frame on `subSid` with HTTP status 200. **Does not** set `end_body=true` — this stream will keep delivering `body_chunk` frames (each a complete JSON event) until the Noise session closes.
+Server returns an immediate `response` frame on `subSid` with HTTP status 200. **Does not** set `end_body=true` — this stream will keep delivering `body_chunk` frames (each a complete JSON event) until the Noise session closes. `HatchClient.hasResponded(sid)` returns true once that first response frame has been seen; we use it to gate the dependent `/chat/stream` call for main chat.
 
-Server also replays all historic events after `after_chat_event_seq=0` as a burst of events on this stream. We filter those out below by timestamp.
+Server replays all historic events after `after_chat_event_seq=0`. We drop pre-sendStartMs events for main chat, but keep replays for side chats so the first-message reply (which may have fired before subscribe attached) comes through.
 
 ## 5. Send the user message
 
-Record `sendStartMs = Date.now()` **before** firing the request.
+For main chat we wait for subscribe to attach (`hasResponded(subSid) === true`) before firing to avoid losing early deltas. For side chats we fire first — the thread must exist on the server before the scoped subscribe makes sense.
 
 ```ts
-const sendSid = await client.request("POST", "/chat/stream", {
+const streamBody: Record<string, unknown> = {
     message: userText,
-    node_id: clientId,         // SAME uuid as register-capabilities
+    node_id: nodeId,                    // SAME uuid as register-capabilities
     capabilities: [...],
     timezone: "Asia/Calcutta",
-});
+};
+if (sessionState?.sessionId) {
+    streamBody.session_id = sessionState.sessionId;       // client-chosen thread UUID
+    streamBody.metadata   = { thread_is_dictation_used: false };
+}
+const sendSid = client.request("POST", "/chat/stream", streamBody);
 ```
 
 If `userText` is large (Claude Code often is), `request()` auto-chunks the serialized ServiceRequest across multiple `NoiseTransportFrame` chunks (`chunk_id` groups them, `chunk_index` sequences them, `MAX_CHUNK_PAYLOAD = 48KB`).
@@ -86,39 +107,31 @@ This is the sync ack — the server has accepted the message. The agent now star
 
 ## 6. Collect the stream
 
-Loop calling `client._recvOne()`:
+Loop pulling events, accumulating text until `delta.message_done` or `message.assistant`:
 
 ```ts
-while (!gotDone && Date.now() < deadline) {
-    const r = await client._recvOne();
-    if (r === null) continue;                    // timeout, keep polling
-    if (r === "closed") break;                   // server closed
-    const { sid, kind, obj } = r;
+while (!done && Date.now() < deadline) {
+    const r = await client.recvOne();
+    if (r === null) continue;
+    if (r === "closed") break;
 
-    if (kind === "complete" && sid === sendSid) {
-        // sync ack from step 5
-        const ack = obj; continue;
+    if (r.kind === "complete" && r.streamId === sendSid) {
+        ackMessageId = r.body.message_id;      // sync ack
+        continue;
     }
+    if (r.kind !== "event") continue;
 
-    if (kind !== "event") continue;              // ignore other sync responses
+    // Main chat: drop replay by ts_ms. Side chat: keep replay — first-message
+    // reply may be in replay because subscribe attached after the agent fired.
+    if (!sessionId && r.obj.ts_ms < sendStartMs) continue;
 
-    if ((obj.ts_ms ?? 0) < sendStartMs) continue; // drop catch-up replay
-
-    const { event, payload } = obj;
-    if (event === "delta.text_append") {
-        textParts.push(payload.text);
-        onDelta(payload.text);                   // stream to client (if SSE)
-    } else if (event === "delta.message_done") {
-        // Short replies may have no text_append — pull from transcript
-        if (!textParts.length) {
-            for (const m of payload.transcript.messages)
-                for (const c of m.content)
-                    if (c.type === "text") textParts.push(c.text);
-        }
-        gotDone = true;
-    }
+    if (r.obj.event === "delta.text_append")  textParts.push(r.obj.payload.text);
+    if (r.obj.event === "delta.message_done") { ...pull transcript if empty; break }
+    if (r.obj.event === "message.assistant")  { ...push display_text; break }
 }
 ```
+
+**Fallback — side chat first-message race:** if a side chat yields no text parts after the loop finishes, poll `GET /chat/history?limit=40&transcript_mode=messages&session_id=<thread>` and extract the first `message.assistant` entry whose index is after our sent `message_id`. The thread existed on the server before subscribe attached, so the stored reply is always retrievable.
 
 ## 7. Shape the response
 

@@ -101,12 +101,25 @@ Each of these opens a stream the server keeps writing JSON events to. Body is sm
 
 ### `/chat/stream` request body (what the browser actually sends)
 
+Main chat (no thread):
 ```json
 {
   "message":      "<user text>",
   "node_id":      "<uuid — same as client_id passed to register-capabilities>",
   "capabilities": ["chat_cancel", "delta_stream", "custom_reactions", "custom_reactions_facebook_thumbs_up_v1"],
   "timezone":     "<IANA tz, e.g. Asia/Calcutta>"
+}
+```
+
+Side chat (thread). First use of a fresh `session_id` creates the thread; subsequent uses continue it:
+```json
+{
+  "message":      "<user text>",
+  "node_id":      "<uuid>",
+  "capabilities": [...],
+  "session_id":   "<client-chosen UUID — the thread id>",
+  "timezone":     "Asia/Calcutta",
+  "metadata":     {"thread_is_dictation_used": false}
 }
 ```
 
@@ -117,14 +130,28 @@ Sync ack response:
  "session_id":"<chat session uuid>"}
 ```
 
-The actual assistant reply arrives as a stream of events on the `/chat/subscribe` stream (not on this request's stream_id). See `docs/request-flow.md`.
+The assistant reply arrives as `delta.*` events on `/chat/subscribe`. For side chats the first-message reply may race the subscribe attach — use `/chat/history?session_id=X` as a fallback (see below).
+
+### `GET /chat/history?limit=40&transcript_mode=messages&session_id=<thread uuid>`
+
+Returns the full event log for a thread. Used by the proxy as a fallback when WS deltas are lost on first message to a brand-new side chat.
+
+Response shape:
+```json
+{"ok": true, "result": {"channel": "all", "chat_events": [
+  {"event_name": "message.user",      "display_text": "...", "message_id": "...", "seq": 278, ...},
+  {"event_name": "message.assistant", "display_text": "SIDE-X-OK", "message_id": "assistant-msg-...", "seq": 279, ...}
+]}}
+```
+
+Grab the first `message.assistant` entry whose index is after your sent `message_id`.
 
 ### Client lifecycle
 
 | Verb | Path | Body | Notes |
 |---|---|---|---|
 | POST | `/client/register-capabilities` | `{client_id, platform, display_name, version, capabilities:{...}}` | **required before `/chat/subscribe`** to receive pushed events |
-| POST | `/api/nodes/register` | — | node registration (we don't call this; browser does) |
+| POST | `/api/nodes/register` | `{node_id, display_name, platform, commands_v2:{ping:{description:"..."}}}` | **required** for side-chat event delivery — muse routes thread events only to registered nodes |
 | POST | `/api/ping` | — | keepalive (observed, not required for us) |
 | POST | `/api/fs/subscribe` | `{}` | |
 | POST | `/onboarding/pages` | — | |

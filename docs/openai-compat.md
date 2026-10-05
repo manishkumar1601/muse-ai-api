@@ -9,6 +9,8 @@ GET   /v1/models             returns one entry: muse-spark
 
 Auth: `Authorization: Bearer <anything>` if `MUSE_PROXY_KEY` is unset. If set, header must match.
 
+**Side-chat routing (optional):** pass `X-Muse-Session: <any-string>` to route the request to a dedicated side chat on muse.ai. Two requests with the same value share one side chat; different values get separate side chats. Omit → main chat. If no header is set, the proxy also derives a session key from `Authorization: Bearer <token>` so distinct API keys get distinct side chats automatically.
+
 ## Point an OpenAI SDK at it
 
 ### Python
@@ -48,6 +50,15 @@ console.log(r.choices[0].message.content);
 ```bash
 curl http://127.0.0.1:8787/v1/chat/completions \
   -H "Authorization: Bearer anything" \
+  -H "Content-Type: application/json" \
+  -d '{"model":"muse-spark","messages":[{"role":"user","content":"hi"}]}'
+```
+
+Side chat (dedicated thread on muse.ai):
+```bash
+curl http://127.0.0.1:8787/v1/chat/completions \
+  -H "Authorization: Bearer anything" \
+  -H "X-Muse-Session: project-alpha" \
   -H "Content-Type: application/json" \
   -d '{"model":"muse-spark","messages":[{"role":"user","content":"hi"}]}'
 ```

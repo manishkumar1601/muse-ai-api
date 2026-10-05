@@ -162,7 +162,29 @@ Observed event names so far:
 
 Server replays every event after `after_chat_event_seq`. Pass `0` → everything replays. In our client we filter by `ts_ms < send_start_ms` to drop replays and keep only live events for our request.
 
-## 8. Why `/client/register-capabilities` is required
+## 8. Side chats (threads)
+
+A side chat is a separate conversation visible under the "Side chats" header in the muse sidebar. The protocol identifies it by a client-chosen UUID in the `/chat/stream` body:
+
+```json
+{"message": "...", "node_id": "<uuid>", "capabilities": [...],
+ "session_id": "<thread uuid, client-chosen>",
+ "timezone": "...", "metadata": {"thread_is_dictation_used": false}}
+```
+
+- **First call** with a fresh `session_id` → muse creates a new side chat under that UUID.
+- **Subsequent calls** with the same `session_id` → appended to that thread.
+- **Omit `session_id`** → goes to main chat.
+
+Three things must line up for the assistant reply to reach a non-browser client (we learned this the hard way; see `memory/05-10-2026-side-chat-routing.md`):
+
+1. **Register the node** — `POST /api/nodes/register` with your `node_id` BEFORE sending. Muse routes thread events only to registered nodes.
+2. **Reuse `node_id` across all calls for the same API session** — `register-capabilities.client_id`, `/chat/stream.node_id`, `/api/nodes/register.node_id` all the same UUID. Events route back to that identity.
+3. **Scope the subscribe** — `POST /chat/subscribe` with `session_id: <thread>` in body and `after_chat_event_seq: 0` so the server replays prior events (first-message reply may already have fired before the subscribe attached).
+
+**Fallback for first-message race:** poll `GET /chat/history?limit=40&transcript_mode=messages&session_id=X` and pick the first `message.assistant` entry after your sent `message_id`. Deltas can be lost between thread creation and subscribe attach; the history poll always sees the stored reply.
+
+## 9. Why `/client/register-capabilities` is required
 
 Without a prior `POST /client/register-capabilities` with a `client_id`, the server routes server-pushed events to whichever registered `client_id` it saw last (likely your open browser tab). To receive events on OUR connection, we must register our own `client_id` AND use the same UUID as `node_id` in the `/chat/stream` POST.
 

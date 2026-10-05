@@ -9,6 +9,8 @@ POST  /v1/messages/count_tokens   returns a crude chars/4 estimate
 
 Auth: `x-api-key: <anything>` or `Authorization: Bearer <anything>` if `MUSE_PROXY_KEY` is unset.
 
+**Side-chat routing (optional):** pass `X-Muse-Session: <any-string>` to route the request to a dedicated side chat on muse.ai. Two requests with the same value share one side chat; different values get separate side chats. Omit → main chat. If no header is set, the proxy derives a session key from the `Authorization` bearer token (or `x-api-key`) so distinct API keys get distinct side chats automatically.
+
 ## Claude Code — the main use case
 
 **Important:** set the env vars in the shell where you run `claude`, not globally. They do not touch `~/.claude/settings.json` or `~/.claude/.credentials.json`. Close the shell → `claude` goes back to your real Anthropic account.
