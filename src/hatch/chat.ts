@@ -166,12 +166,17 @@ async function sideChatSendAndPoll(
     return { replyText: "", messageId: randomUUID(), events: [] };
   }
 
-  // Poll /chat/history until the assistant reply appears after our message.
+  // Poll /chat/history until the assistant reply is STABLE (same text in two
+  // consecutive polls). display_text_ready + status==completed are not enough
+  // on their own — muse flips them true on intermediate snapshots.
   const path = `/chat/history?limit=40&transcript_mode=messages&session_id=${sessionId}`;
   const deadline = Date.now() + args.listenMs;
+  let lastText: string | null = null;
+  let emittedLen = 0;
   while (Date.now() < deadline) {
     const sid = args.client.request("GET", path);
     const pollDeadline = Math.min(Date.now() + 3000, deadline);
+    let currentText: string | null = null;
     while (Date.now() < pollDeadline) {
       const r = await args.client.recvOne();
       if (r === null) continue;
@@ -184,28 +189,30 @@ async function sideChatSendAndPoll(
           for (const e of events.slice(ourIdx + 1)) {
             if (e["event_name"] !== "message.assistant") continue;
             if (typeof e["display_text"] !== "string") continue;
-            // Must wait for muse to finish generating — otherwise we get an
-            // incomplete prefix like "Project =" instead of the full reply.
-            if (e["display_text_ready"] !== true) continue;
-            const payload = (e["payload"] ?? {}) as Record<string, unknown>;
-            if (payload["status"] !== undefined && payload["status"] !== "completed") continue;
-            const text = e["display_text"] as string;
-            // Chunk into ~300-char deltas so Anthropic SSE emits multiple
-            // content_block_delta events — a single huge delta renders as
-            // only the first word in Claude Code.
-            if (args.onDelta) {
-              for (let i = 0; i < text.length; i += 300) {
-                args.onDelta(text.slice(i, i + 300));
-                await new Promise((r) => setTimeout(r, 5));
-              }
-            }
-            return { replyText: text, messageId: ackMessageId, events: [] };
+            currentText = e["display_text"] as string;
+            break;
           }
         }
         break;
       }
     }
+    if (currentText !== null) {
+      // Stream newly-grown bytes as they arrive — Claude Code shows progress
+      // instead of waiting silently for the whole reply.
+      if (args.onDelta && currentText.length > emittedLen) {
+        const fresh = currentText.slice(emittedLen);
+        for (let i = 0; i < fresh.length; i += 300) {
+          args.onDelta(fresh.slice(i, i + 300));
+          await new Promise((r) => setTimeout(r, 5));
+        }
+        emittedLen = currentText.length;
+      }
+      if (lastText === currentText && currentText.length > 0) {
+        return { replyText: currentText, messageId: ackMessageId, events: [] };
+      }
+      lastText = currentText;
+    }
     await new Promise((r) => setTimeout(r, 800));
   }
-  return { replyText: "", messageId: ackMessageId, events: [] };
+  return { replyText: lastText ?? "", messageId: ackMessageId, events: [] };
 }
