@@ -118,8 +118,13 @@ export function registerAnthropic(app: Hono, deps: AnthropicDeps): void {
         }
       }
       await run;
-      // ponytail: runError swallowed after streaming started; client already got 200
-      void runError;
+      if (runError !== null) {
+        const errMsg = (runError as Error).message;
+        await s.writeSSE({ event: "content_block_delta", data: JSON.stringify({
+          type: "content_block_delta", index: 0,
+          delta: { type: "text_delta", text: `\n[proxy error: ${errMsg}]` },
+        }) });
+      }
 
       await s.writeSSE({ event: "content_block_stop", data: JSON.stringify({ type: "content_block_stop", index: 0 }) });
       await s.writeSSE({ event: "message_delta", data: JSON.stringify({
