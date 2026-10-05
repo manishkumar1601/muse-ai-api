@@ -182,11 +182,16 @@ async function sideChatSendAndPoll(
         const ourIdx = events.findIndex((e) => e["message_id"] === ackMessageId);
         if (ourIdx >= 0) {
           for (const e of events.slice(ourIdx + 1)) {
-            if (e["event_name"] === "message.assistant" && typeof e["display_text"] === "string") {
-              const text = e["display_text"] as string;
-              args.onDelta?.(text);
-              return { replyText: text, messageId: ackMessageId, events: [] };
-            }
+            if (e["event_name"] !== "message.assistant") continue;
+            if (typeof e["display_text"] !== "string") continue;
+            // Must wait for muse to finish generating — otherwise we get an
+            // incomplete prefix like "Project =" instead of the full reply.
+            if (e["display_text_ready"] !== true) continue;
+            const payload = (e["payload"] ?? {}) as Record<string, unknown>;
+            if (payload["status"] !== undefined && payload["status"] !== "completed") continue;
+            const text = e["display_text"] as string;
+            args.onDelta?.(text);
+            return { replyText: text, messageId: ackMessageId, events: [] };
           }
         }
         break;
