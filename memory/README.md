@@ -23,6 +23,7 @@ Dated session logs — one file per phase or significant chunk of work. Not refe
 | [16-11-2026-nov-hardening.md](16-11-2026-nov-hardening.md) | — | Debug gate, approx token counts, cancel-on-disconnect, serialize-pool, `x_muse_presentations` surfacing |
 | [16-11-2026-multiplex-pool.md](16-11-2026-multiplex-pool.md) | — | Per-stream dispatcher in HatchClient; serialize-pool → multiplex-pool |
 | [16-11-2026-attestation-scoping.md](16-11-2026-attestation-scoping.md) | — | Phase 8 scoping — AMD SEV-SNP, not ed25519. Why it's 1-2 weeks not 3-5 days |
+| [16-11-2026-attestation-finding.md](16-11-2026-attestation-finding.md) | — | Captured a real bundle. muse is running NON_TEE — no SNP evidence to verify. Parser ready for when they flip |
 
 ## How to use
 

@@ -19,6 +19,8 @@ export class XxInitiator {
     this.s = staticKey ?? generateKeyPair();
   }
 
+  peekRemoteStatic(): Uint8Array | null { return this.rs; }
+
   writeMessage1(payload: Uint8Array): Uint8Array {
     if (this.phase !== 1) throw new Error("writeMessage1 called in wrong phase");
     this.e = generateKeyPair();

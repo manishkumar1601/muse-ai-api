@@ -12,6 +12,7 @@
     "dev": "tsx watch index.ts",
     "bootstrap": "tsx src/cli/bootstrap.ts",
     "login": "tsx scripts/login.ts",
+    "inspect:attestation": "tsx src/cli/inspect-attestation.ts",
     "build": "tsc",
     "test": "node --test --import tsx tests/*.test.ts",
     "typecheck": "tsc --noEmit"

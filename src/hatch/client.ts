@@ -145,6 +145,7 @@ export class HatchClient {
     const msg2Payload = hs.readMessage2(msg2raw);
     if (process.env["DUMP_ATTESTATION"] === "1") {
       const b64 = (u: Uint8Array): string => Buffer.from(u).toString("base64");
+      const rs = hs.peekRemoteStatic();
       const dump = {
         ts: new Date().toISOString(),
         ws_url: session.ws_url,
@@ -152,7 +153,8 @@ export class HatchClient {
         msg1_raw_b64: b64(msg1),
         msg2_raw_b64: b64(msg2raw),
         msg2_payload_b64: b64(msg2Payload),
-        notes: "msg1_raw[0..32] = client x25519 ephemeral pub (the e in ReportDataInput). msg1_nonce = client_nonce. msg2_payload decodes as thatch.attestation.v1.AttestationBundle.",
+        ...(rs !== null ? { server_static_pub_b64: b64(rs) } : {}),
+        notes: "msg1_raw[0..32] = client x25519 ephemeral pub. msg1_nonce = client_nonce. msg2_payload decodes as thatch.attestation.v1.AttestationBundle. server_static_pub = the server's long-lived Noise static key (likely what ReportDataInput.x25519_public_key echoes).",
       };
       writeFileSync("attestation-dump.json", JSON.stringify(dump, null, 2));
       logger.warn("DUMP_ATTESTATION: wrote attestation-dump.json — contains session-linked bytes, keep local");
