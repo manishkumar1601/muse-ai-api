@@ -73,7 +73,7 @@ ANTHROPIC_MODEL=muse-spark  ANTHROPIC_DEFAULT_OPUS_MODEL=muse-spark
 
 ## Known limits
 
-- Text only. The agent can push images / widgets / app cards (`delta.presentation` events). Those are logged but not surfaced to the OpenAI/Anthropic client.
+- Images / widgets / app cards (`delta.presentation`, `widget.state_updated`, `delta.inline_option`, `task.status`, `approvals.snapshot`) are surfaced as a vendor extension: `x_muse_presentations: PresentationEvent[]` on non-stream responses, `x_muse_presentation` SSE events (Anthropic) or chunks with `choices: []` + `x_muse_presentation` (OpenAI) on streams. Standard clients ignore the extra fields; opt-in clients can read them. Main chat only — side-chat (`X-Muse-Session`) polls `/chat/history` and never sees these events.
 - Multi-turn conversation threading is server-side only. The proxy flattens your `messages[]` into a single prompt per request.
 - Faked token counts (zeros). Hatch does not expose a tokenizer.
 - No cancel-on-disconnect. A dropped client doesn't abort the in-flight Hatch request.

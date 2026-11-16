@@ -2,7 +2,7 @@ import { readFileSync } from "node:fs";
 import { bootstrap } from "../bootstrap/session.js";
 import type { Session } from "../bootstrap/session.js";
 import { HatchClient } from "../hatch/client.js";
-import { sendAndCollectReply } from "../hatch/chat.js";
+import { sendAndCollectReply, type PresentationEvent } from "../hatch/chat.js";
 import { getTls } from "../hatch/tls.js";
 import { createClientPool } from "../hatch/pool.js";
 import { SessionStore, DEFAULT_SESSION_KEY } from "../hatch/sessions.js";
@@ -44,7 +44,8 @@ export async function runChat(
   onDelta?: (c: string) => void,
   sessionKey: string = DEFAULT_SESSION_KEY,
   signal?: AbortSignal,
-): Promise<{ replyText: string; messageId: string }> {
+  onPresentation?: (p: PresentationEvent) => void,
+): Promise<{ replyText: string; messageId: string; presentations: PresentationEvent[] }> {
   const state = sessionKey === DEFAULT_SESSION_KEY ? undefined : chatSessions.get(sessionKey);
   const p = getPool(cfg);
   for (let attempt = 0; attempt < 2; attempt++) {
@@ -55,8 +56,9 @@ export async function runChat(
           ...(state !== undefined ? { sessionState: state } : {}),
           ...(onDelta !== undefined ? { onDelta } : {}),
           ...(signal !== undefined ? { signal } : {}),
+          ...(onPresentation !== undefined ? { onPresentation } : {}),
         });
-        return { replyText: r.replyText, messageId: r.messageId };
+        return { replyText: r.replyText, messageId: r.messageId, presentations: r.presentations };
       });
     } catch (e) {
       const msg = e instanceof Error ? e.message : String(e);

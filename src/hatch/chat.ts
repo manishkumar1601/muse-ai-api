@@ -17,12 +17,30 @@ export const CAPABILITIES: readonly string[] = [
   "custom_reactions_facebook_thumbs_up_v1",
 ];
 
+export interface PresentationEvent {
+  kind: string;
+  ts_ms?: number;
+  payload: Record<string, unknown>;
+}
+
+// Non-text events we forward to clients as x_muse_presentations. Everything else
+// (agent.status, chat.seen, reactions.updated, message.user, text deltas,
+// message terminators) stays internal.
+const PRESENTATION_KINDS: ReadonlySet<string> = new Set([
+  "delta.presentation",
+  "delta.inline_option",
+  "widget.state_updated",
+  "task.status",
+  "approvals.snapshot",
+]);
+
 export interface SendAndCollectArgs {
   client: HatchClient;
   userText: string;
   timezone: string;
   listenMs: number;
   onDelta?: (chunk: string) => void;
+  onPresentation?: (p: PresentationEvent) => void;
   clientId?: string;
   sessionState?: ChatSessionState;
   signal?: AbortSignal;
@@ -32,6 +50,7 @@ export interface SendAndCollectResult {
   replyText: string;
   messageId: string;
   events: Record<string, unknown>[];
+  presentations: PresentationEvent[];
 }
 
 export async function sendAndCollectReply(
@@ -73,6 +92,7 @@ export async function sendAndCollectReply(
   let sendStartMs = Date.now();
   let sendSid: bigint | null = null;
   const events: Record<string, unknown>[] = [];
+  const presentations: PresentationEvent[] = [];
   const textParts: string[] = [];
   let ackMessageId: string | undefined;
   const deadline = Date.now() + args.listenMs;
@@ -108,6 +128,13 @@ export async function sendAndCollectReply(
     const ev = obj["event"] as string;
     const payload = (obj["payload"] ?? {}) as Record<string, unknown>;
 
+    if (PRESENTATION_KINDS.has(ev)) {
+      const p: PresentationEvent = { kind: ev, payload, ...(typeof tsMs === "number" ? { ts_ms: tsMs } : {}) };
+      presentations.push(p);
+      args.onPresentation?.(p);
+      continue;
+    }
+
     if (ev === "delta.text_append") {
       const text = (payload["text"] ?? payload["delta"] ?? "") as string;
       textParts.push(text);
@@ -135,7 +162,7 @@ export async function sendAndCollectReply(
     }
   }
 
-  return { replyText: textParts.join(""), messageId: ackMessageId ?? randomUUID(), events };
+  return { replyText: textParts.join(""), messageId: ackMessageId ?? randomUUID(), events, presentations };
 }
 
 async function sideChatSendAndPoll(
@@ -171,7 +198,7 @@ async function sideChatSendAndPoll(
     }
   }
   if (!ackMessageId) {
-    return { replyText: "", messageId: randomUUID(), events: [] };
+    return { replyText: "", messageId: randomUUID(), events: [], presentations: [] };
   }
 
   // Poll /chat/history until the assistant reply is STABLE (same text in two
@@ -216,11 +243,12 @@ async function sideChatSendAndPoll(
       }
       if (lastText === currentText && currentText.length > 0) {
         dbg("stable", { len: currentText.length });
-        return { replyText: currentText, messageId: ackMessageId, events: [] };
+        return { replyText: currentText, messageId: ackMessageId, events: [], presentations: [] };
       }
       lastText = currentText;
     }
     await new Promise((r) => setTimeout(r, 800));
   }
-  return { replyText: lastText ?? "", messageId: ackMessageId, events: [] };
+  // ponytail: side-chat path has no subscribe stream → presentations are never captured here.
+  return { replyText: lastText ?? "", messageId: ackMessageId, events: [], presentations: [] };
 }

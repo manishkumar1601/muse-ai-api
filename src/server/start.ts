@@ -7,15 +7,22 @@ import { logRequest } from "./middleware.js";
 import { registerOpenAI } from "./openai.js";
 import { registerAnthropic } from "./anthropic.js";
 import { runChat as realRunChat } from "./handler.js";
+import type { PresentationEvent } from "../hatch/chat.js";
 
 export interface AppDeps {
   cfg?: Config;
-  runChat?: (userText: string, onDelta?: (c: string) => void, sessionKey?: string, signal?: AbortSignal) => Promise<{ replyText: string; messageId: string }>;
+  runChat?: (
+    userText: string,
+    onDelta?: (c: string) => void,
+    sessionKey?: string,
+    signal?: AbortSignal,
+    onPresentation?: (p: PresentationEvent) => void,
+  ) => Promise<{ replyText: string; messageId: string; presentations?: PresentationEvent[] }>;
 }
 
 export function createApp(deps?: AppDeps): Hono {
   const cfg = deps?.cfg ?? loadConfig();
-  const runChat = deps?.runChat ?? ((userText: string, onDelta?: (c: string) => void, sessionKey?: string, signal?: AbortSignal) => realRunChat(cfg, userText, onDelta, sessionKey, signal));
+  const runChat = deps?.runChat ?? ((userText: string, onDelta?: (c: string) => void, sessionKey?: string, signal?: AbortSignal, onPresentation?: (p: PresentationEvent) => void) => realRunChat(cfg, userText, onDelta, sessionKey, signal, onPresentation));
   const app = new Hono();
   app.use("*", logRequest);
   app.get("/healthz", (c) => c.json({ ok: true }));
