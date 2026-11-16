@@ -9,6 +9,7 @@
  */
 
 import { randomBytes } from "node:crypto";
+import { writeFileSync } from "node:fs";
 import { XxInitiator } from "../noise/index.js";
 import { CipherState } from "../noise/index.js";
 import {
@@ -138,9 +139,24 @@ export class HatchClient {
     const msg1    = hs.writeMessage1(payload);
     ws.send(msg1);
 
-    // msg2: receive + discard decrypted payload (we don't use the server's nonce).
+    // msg2: receive + decrypt. Payload is the server's AttestationBundle (AMD SEV-SNP).
+    // We don't verify yet — if DUMP_ATTESTATION=1, dump raw + plaintext for offline analysis.
     const msg2raw = await HatchClient._wsRecv(ws);
-    hs.readMessage2(msg2raw);
+    const msg2Payload = hs.readMessage2(msg2raw);
+    if (process.env["DUMP_ATTESTATION"] === "1") {
+      const b64 = (u: Uint8Array): string => Buffer.from(u).toString("base64");
+      const dump = {
+        ts: new Date().toISOString(),
+        ws_url: session.ws_url,
+        msg1_nonce_b64: b64(nonce),
+        msg1_raw_b64: b64(msg1),
+        msg2_raw_b64: b64(msg2raw),
+        msg2_payload_b64: b64(msg2Payload),
+        notes: "msg1_raw[0..32] = client x25519 ephemeral pub (the e in ReportDataInput). msg1_nonce = client_nonce. msg2_payload decodes as thatch.attestation.v1.AttestationBundle.",
+      };
+      writeFileSync("attestation-dump.json", JSON.stringify(dump, null, 2));
+      logger.warn("DUMP_ATTESTATION: wrote attestation-dump.json — contains session-linked bytes, keep local");
+    }
 
     // msg3: enc_s + encryptAndHash(empty). Splits into (send, recv) CipherStates.
     const { bytes: msg3, split: { send, recv } } = hs.writeMessage3(new Uint8Array(0));
