@@ -97,25 +97,34 @@ export async function sendAndCollectReply(
   let ackMessageId: string | undefined;
   const deadline = Date.now() + args.listenMs;
 
+  // Background ack waiter on sendSid. Multiplex: sendSid delivers the sync-ack
+  // complete; subscribeSid delivers the streamed events. Independent reads.
+  const ackP = (async () => {
+    while (!args.signal?.aborted && !ackMessageId && Date.now() < deadline) {
+      if (sendSid === null) { await new Promise((r) => setTimeout(r, 20)); continue; }
+      const r = await args.client.recvOne(sendSid, 60_000);
+      if (r === null) continue;
+      if (r === "closed") return;
+      if (r.kind === "complete") {
+        const body = r.body as Record<string, unknown>;
+        if (typeof body === "object" && body !== null && typeof body["message_id"] === "string") {
+          ackMessageId = body["message_id"] as string;
+        }
+        return;
+      }
+    }
+  })();
+
   outer: while (!args.signal?.aborted && Date.now() < deadline) {
     if (sendSid === null && args.client.hasResponded(subscribeSid)) {
       sendStartMs = Date.now();
       sendSid = args.client.request("POST", "/chat/stream", streamBody);
     }
-    const r = await args.client.recvOne();
+    const r = await args.client.recvOne(subscribeSid);
     if (r === null) continue;
     if (r === "closed") break;
     if (r.kind === "reset") {
       logger.warn({ streamId: String(r.streamId), code: r.code, reason: r.reason }, "hatch: reset received");
-      continue;
-    }
-    if (r.kind === "complete") {
-      if (sendSid !== null && r.streamId === sendSid) {
-        const body = r.body as Record<string, unknown>;
-        if (typeof body === "object" && body !== null && typeof body["message_id"] === "string") {
-          ackMessageId = body["message_id"] as string;
-        }
-      }
       continue;
     }
     if (r.kind !== "event") continue;
@@ -162,6 +171,7 @@ export async function sendAndCollectReply(
     }
   }
 
+  await ackP;
   return { replyText: textParts.join(""), messageId: ackMessageId ?? randomUUID(), events, presentations };
 }
 
@@ -186,10 +196,10 @@ async function sideChatSendAndPoll(
   let ackMessageId: string | undefined;
   const ackDeadline = Date.now() + 10_000;
   while (!ackMessageId && !args.signal?.aborted && Date.now() < ackDeadline) {
-    const r = await args.client.recvOne();
+    const r = await args.client.recvOne(sendSid, Math.max(100, ackDeadline - Date.now()));
     if (r === null) continue;
     if (r === "closed") break;
-    if (r.kind === "complete" && r.streamId === sendSid) {
+    if (r.kind === "complete") {
       const body = r.body as Record<string, unknown>;
       if (typeof body === "object" && body !== null && typeof body["message_id"] === "string") {
         ackMessageId = body["message_id"] as string;
@@ -213,10 +223,10 @@ async function sideChatSendAndPoll(
     const pollDeadline = Math.min(Date.now() + 3000, deadline);
     let currentText: string | null = null;
     while (!args.signal?.aborted && Date.now() < pollDeadline) {
-      const r = await args.client.recvOne();
+      const r = await args.client.recvOne(sid, Math.max(100, pollDeadline - Date.now()));
       if (r === null) continue;
       if (r === "closed") break;
-      if (r.kind === "complete" && r.streamId === sid) {
+      if (r.kind === "complete") {
         const body = r.body as { result?: { chat_events?: Array<Record<string, unknown>> } };
         const events = body?.result?.chat_events ?? [];
         const ourIdx = events.findIndex((e) => e["message_id"] === ackMessageId);

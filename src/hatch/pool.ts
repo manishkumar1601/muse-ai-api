@@ -10,27 +10,41 @@ export interface ClientPool {
   peek(): HatchClient | null;
 }
 
-// ponytail: serialized single-client pool. Multiplex (per-stream recvOne dispatch) is the upgrade path if throughput matters.
+// Multiplex pool: one HatchClient, N concurrent withClient callers. HatchClient's
+// dispatcher routes events to per-stream queues so overlapping requests don't
+// clobber each other. Only client-open is mutex'd (not request handling), so the
+// first caller pays the ~500 ms handshake and the rest reuse it. On fn error we
+// close + null the client; other in-flight callers will surface "closed" from
+// recvOne and retry via the handler's bootstrap path.
 export function createClientPool(deps: PoolDeps): ClientPool {
   let current: HatchClient | null = null;
-  let tail: Promise<unknown> = Promise.resolve();
+  let opening: Promise<HatchClient> | null = null;
+
+  async function getClient(): Promise<HatchClient> {
+    if (current !== null) return current;
+    if (opening !== null) return opening;
+    opening = (async () => {
+      try {
+        const c = await deps.openClient();
+        current = c;
+        return c;
+      } finally {
+        opening = null;
+      }
+    })();
+    return opening;
+  }
 
   async function withClient<T>(fn: (client: HatchClient) => Promise<T>): Promise<T> {
-    const gate = tail;
-    let release!: () => void;
-    tail = new Promise<void>((r) => { release = r; });
+    const c = await getClient();
     try {
-      await gate;
-      if (current === null) current = await deps.openClient();
-      try {
-        return await fn(current);
-      } catch (e) {
+      return await fn(c);
+    } catch (e) {
+      if (current === c) {
         await closeSafely(current);
         current = null;
-        throw e;
       }
-    } finally {
-      release();
+      throw e;
     }
   }
 

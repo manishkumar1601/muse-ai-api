@@ -106,7 +106,7 @@ Output: a drop-in muse.ai backend for any OpenAI or Anthropic SDK.
 |---|---|
 | Attestation chain verification | Phase 2 logs the mismatch but doesn't verify. Would require parsing `attestation_bundle.proto` and ed25519 sig verification. Non-trivial, not blocking usage. |
 | Multi-turn conversation threading in the proxy | Flattening works. Agent has its own server-side memory. |
-| Multiplex over the pool | Serialize-pool ships November 2026. Per-stream `recvOne` multiplex is the next step if concurrency matters. |
+| — | — |
 | Real (tokenizer-accurate) token counts | Chars/4 estimate ships November 2026. Hatch still doesn't expose a tokenizer — tiktoken would be the upgrade. |
 
 ## Timing budget (if you continue)
@@ -114,7 +114,7 @@ Output: a drop-in muse.ai backend for any OpenAI or Anthropic SDK.
 | Would-be-next | Rough estimate |
 |---|---|
 | Attestation verification (Phase 8) | 3-5 days |
-| Per-stream multiplex over the pool | 1-2 days |
+| — | — |
 | Multi-turn session state | 1 day (keyed by request ID or user ID) |
 | Deploy as a hosted service with TLS + auth | 1 day |
 

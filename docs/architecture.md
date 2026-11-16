@@ -107,7 +107,7 @@ HTTP calls use `cycletls` for HTTP; the WS upgrade itself uses Node's native `gl
 
 ## Concurrency model
 
-Each incoming OpenAI/Anthropic request → serialize-pool checkout → send-and-collect round-trip → return to pool. The first request pays the ~500 ms Noise handshake; subsequent requests reuse the same `HatchClient`. On any error the pool closes + nulls the client so the next caller opens a fresh one. Pool is FIFO-serialized (one in-flight request at a time); multiplex is the upgrade path. See `src/hatch/pool.ts`.
+Each incoming OpenAI/Anthropic request → multiplex-pool checkout → send-and-collect round-trip → return. The first request pays the ~500 ms Noise handshake; subsequent requests reuse the same `HatchClient`. Concurrent requests overlap on the same WS: `HatchClient` runs a background dispatcher that routes decrypted events into per-`stream_id` queues, and `recvOne(sid)` pops from the right queue — no cross-request event theft. On any `fn` error the pool closes + nulls the client, other in-flight callers surface `"closed"` from their `recvOne` + retry via the handler's bootstrap path. See `src/hatch/pool.ts` + `src/hatch/client.ts`.
 
 The Hono server is async-native. Hatch work runs inside an async flow with streaming deltas pushed through Node.js readable streams to the SSE generator.
 

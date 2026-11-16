@@ -100,9 +100,15 @@ export class HatchClient {
 
   hasResponded(streamId: bigint): boolean { return this._responded.has(streamId); }
 
-  // Inbound message queue drained by recvOne.
+  // Inbound message queue drained by the dispatcher.
   private readonly _msgQueue: Uint8Array[] = [];
   private _wsCloseFlag = false;
+
+  // Multiplex: per-stream delivery. Dispatcher fans incoming events into
+  // queues keyed by streamId; recvOne(sid) pops from the right queue.
+  private readonly _streamQueues  = new Map<bigint, Array<RecvEvent | "closed">>();
+  private readonly _streamWaiters = new Map<bigint, Array<(v: RecvEvent | "closed") => void>>();
+  private _dispatcherStarted = false;
 
   private constructor(ws: MinWs, send: CipherState, recv: CipherState) {
     this._ws   = ws;
@@ -193,11 +199,72 @@ export class HatchClient {
   }
 
   /**
-   * Pull one fully-dispatched event or signal.
-   * Returns null on timeout/incomplete assembly, "closed" on WS close.
+   * Wait for the next fully-dispatched event on the given stream.
+   * Returns null on timeout, "closed" on WS close.
    */
-  async recvOne(timeoutMs = 1500): Promise<RecvEvent | null | "closed"> {
-    const data = await this._dequeueWithTimeout(timeoutMs);
+  async recvOne(sid: bigint, timeoutMs = 1500): Promise<RecvEvent | null | "closed"> {
+    this._ensureDispatcher();
+    const q = this._streamQueues.get(sid);
+    if (q && q.length > 0) {
+      const v = q.shift()!;
+      if (q.length === 0) this._streamQueues.delete(sid);
+      return v;
+    }
+    if (this._wsCloseFlag) return "closed";
+    return new Promise<RecvEvent | null | "closed">((resolve) => {
+      let settled = false;
+      const timer = setTimeout(() => {
+        if (settled) return;
+        settled = true;
+        const list = this._streamWaiters.get(sid);
+        if (list) {
+          const idx = list.indexOf(waiter);
+          if (idx >= 0) list.splice(idx, 1);
+          if (list.length === 0) this._streamWaiters.delete(sid);
+        }
+        resolve(null);
+      }, timeoutMs);
+      const waiter = (v: RecvEvent | "closed"): void => {
+        if (settled) return;
+        settled = true;
+        clearTimeout(timer);
+        resolve(v);
+      };
+      let list = this._streamWaiters.get(sid);
+      if (!list) { list = []; this._streamWaiters.set(sid, list); }
+      list.push(waiter);
+    });
+  }
+
+  private _ensureDispatcher(): void {
+    if (this._dispatcherStarted) return;
+    this._dispatcherStarted = true;
+    void this._runDispatcher();
+  }
+
+  private async _runDispatcher(): Promise<void> {
+    while (!this._closed) {
+      const r = await this._processOneRaw();
+      if (r === "closed") break;
+      if (r === null) continue;
+      const sid = r.streamId;
+      const waiters = this._streamWaiters.get(sid);
+      if (waiters && waiters.length > 0) {
+        const w = waiters.shift()!;
+        if (waiters.length === 0) this._streamWaiters.delete(sid);
+        w(r);
+        continue;
+      }
+      let q = this._streamQueues.get(sid);
+      if (!q) { q = []; this._streamQueues.set(sid, q); }
+      q.push(r);
+    }
+    for (const list of this._streamWaiters.values()) for (const w of list) w("closed");
+    this._streamWaiters.clear();
+  }
+
+  private async _processOneRaw(): Promise<RecvEvent | null | "closed"> {
+    const data = await this._dequeueWithTimeout(1500);
     if (data === null)     return null;
     if (data === "closed") return "closed";
 
