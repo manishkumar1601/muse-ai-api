@@ -4,6 +4,7 @@ import type { Session } from "../bootstrap/session.js";
 import { HatchClient } from "../hatch/client.js";
 import { sendAndCollectReply } from "../hatch/chat.js";
 import { getTls } from "../hatch/tls.js";
+import { createClientPool } from "../hatch/pool.js";
 import { SessionStore, DEFAULT_SESSION_KEY } from "../hatch/sessions.js";
 import { logger } from "../log.js";
 import type { Config } from "../config.js";
@@ -14,6 +15,29 @@ function loadSession(path: string): Session {
 
 export const chatSessions = new SessionStore();
 
+// ponytail: module-level pool — one HatchClient reused across requests, serialized.
+// Saves the ~500ms Noise handshake on every request after the first. Caveat: main-chat
+// /chat/subscribe is re-sent per call → server-side subscribe streams accumulate. Fine
+// until it isn't; move subscribe into pool-open if that bites.
+let pool: ReturnType<typeof createClientPool> | null = null;
+function getPool(cfg: Config): ReturnType<typeof createClientPool> {
+  if (pool !== null) return pool;
+  pool = createClientPool({
+    openClient: async () => {
+      const tls = await getTls();
+      const session = loadSession(cfg.sessionPath);
+      return HatchClient.open(session, tls);
+    },
+  });
+  return pool;
+}
+
+export function resetPool(): Promise<void> {
+  const p = pool;
+  pool = null;
+  return p ? p.reset() : Promise.resolve();
+}
+
 export async function runChat(
   cfg: Config,
   userText: string,
@@ -21,15 +45,11 @@ export async function runChat(
   sessionKey: string = DEFAULT_SESSION_KEY,
   signal?: AbortSignal,
 ): Promise<{ replyText: string; messageId: string }> {
-  const tls = await getTls();
-  // The default key omits sessionState so it goes to the main chat
-  // (preserves pre-side-chat behavior for clients that don't opt in).
   const state = sessionKey === DEFAULT_SESSION_KEY ? undefined : chatSessions.get(sessionKey);
+  const p = getPool(cfg);
   for (let attempt = 0; attempt < 2; attempt++) {
     try {
-      const session = loadSession(cfg.sessionPath);
-      const client = await HatchClient.open(session, tls);
-      try {
+      return await p.withClient(async (client) => {
         const r = await sendAndCollectReply({
           client, userText, timezone: cfg.timezone, listenMs: 60_000,
           ...(state !== undefined ? { sessionState: state } : {}),
@@ -37,12 +57,10 @@ export async function runChat(
           ...(signal !== undefined ? { signal } : {}),
         });
         return { replyText: r.replyText, messageId: r.messageId };
-      } finally {
-        await client.close();
-      }
+      });
     } catch (e) {
       const msg = e instanceof Error ? e.message : String(e);
-      logger.warn({ err: msg, attempt }, "HatchClient open/run failed");
+      logger.warn({ err: msg, attempt }, "pool.withClient failed");
       if (attempt === 0) {
         try {
           await bootstrap({ storageStatePath: cfg.storageStatePath, sessionPath: cfg.sessionPath });
