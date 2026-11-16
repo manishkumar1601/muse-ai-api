@@ -31,8 +31,9 @@ All of the above except SSH keys are in `.gitignore`. **Never commit them.** The
 Our client logs `server_pub_matches_notary: false` on every run. This is **expected**:
 
 - `notary_token.public_key.key` is a CA/root key.
-- The actual VM Noise static key arrives inside the decrypted msg2 payload, along with an **AMD SEV-SNP attestation chain** (not plain ed25519 as earlier docs said).
-- Full verification would require: parsing the SNP report (`SnpEvidence.report`) per the AMD spec, verifying the VCEK→ASK→ARK ECDSA-P384 chain (`AmdSevSnpCertChain`), checking the CRL, and validating the sigstore/cloudflare transparency proof on the image manifest. See `memory/16-11-2026-attestation-scoping.md` for the breakdown.
+- The actual VM Noise static key arrives inside the decrypted msg2 payload, along with an `AttestationBundle` proto.
+- **Current observation (captured 2026-11-16):** muse is sending `Platform: NON_TEE` bundles — `SnpEvidence` is absent. There is no hardware-rooted attestation to verify today. `ReportDataInput` is still sent and the server echoes our `client_nonce` back correctly, but with no signed report backing it, that's just informational. See `memory/16-11-2026-attestation-finding.md`.
+- `src/noise/attestation.ts` + `npm run inspect:attestation` are ready for the day muse flips to AMD SEV-SNP: ECDSA-P384 VCEK → ASK → ARK chain, CRL, sigstore/cloudflare transparency proof. See `memory/16-11-2026-attestation-scoping.md` for the breakdown.
 
 Not verifying leaves us open to a MITM between us and `hatch.metaaivm.com`. Mitigations in practice:
 - TLS from the Node HTTP stack (cycletls for authenticated HTTP calls) pins the server cert chain via standard CA roots.
