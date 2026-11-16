@@ -4,11 +4,10 @@ import { streamSSE } from "hono/streaming";
 import type { Hono } from "hono";
 import type { Config } from "../config.js";
 import { requireAuth } from "./auth.js";
-import { flattenMessages, sessionKeyFromReq } from "./common.js";
+import { approxTokens, flattenMessages, sessionKeyFromReq } from "./common.js";
 import type { ChatMessage } from "./common.js";
 
-// Always on — set PROXY_DEBUG=0 to disable.
-const DEBUG = process.env["PROXY_DEBUG"] !== "0";
+const DEBUG = process.env["PROXY_DEBUG"] === "1";
 const dbg = (tag: string, data: unknown): void => {
   if (!DEBUG) return;
   try { appendFileSync("proxy-debug.log", `[${new Date().toISOString()}] ${tag}: ${JSON.stringify(data)}\n`); } catch { /* best-effort */ }
@@ -16,7 +15,7 @@ const dbg = (tag: string, data: unknown): void => {
 
 export interface AnthropicDeps {
   cfg: Config;
-  runChat(userText: string, onDelta?: (chunk: string) => void, sessionKey?: string): Promise<{ replyText: string; messageId: string }>;
+  runChat(userText: string, onDelta?: (chunk: string) => void, sessionKey?: string, signal?: AbortSignal): Promise<{ replyText: string; messageId: string }>;
 }
 
 export function registerAnthropic(app: Hono, deps: AnthropicDeps): void {
@@ -71,11 +70,13 @@ export function registerAnthropic(app: Hono, deps: AnthropicDeps): void {
     if (!stream) {
       let r: { replyText: string; messageId: string };
       try {
-        r = await deps.runChat(userText, undefined, sKey);
+        r = await deps.runChat(userText, undefined, sKey, c.req.raw.signal);
       } catch (e) {
         const msg = e instanceof Error ? e.message : String(e);
         return c.json({ error: { type: "service_unavailable", message: msg } }, 503);
       }
+      const it = approxTokens(userText);
+      const ot = approxTokens(r.replyText);
       return c.json({
         id: `msg_${r.messageId}`,
         type: "message",
@@ -84,16 +85,17 @@ export function registerAnthropic(app: Hono, deps: AnthropicDeps): void {
         content: [{ type: "text", text: r.replyText }],
         stop_reason: "end_turn",
         stop_sequence: null,
-        usage: { input_tokens: 0, output_tokens: 0 },
+        usage: { input_tokens: it, output_tokens: ot },
       });
     }
 
     return streamSSE(c, async (s) => {
       const msgId = `msg_${randomUUID()}`;
 
+      const inputTokens = approxTokens(userText);
       await s.writeSSE({ event: "message_start", data: JSON.stringify({
         type: "message_start",
-        message: { id: msgId, type: "message", role: "assistant", content: [], model, stop_reason: null, stop_sequence: null, usage: { input_tokens: 0, output_tokens: 0 } },
+        message: { id: msgId, type: "message", role: "assistant", content: [], model, stop_reason: null, stop_sequence: null, usage: { input_tokens: inputTokens, output_tokens: 0 } },
       }) });
 
       await s.writeSSE({ event: "content_block_start", data: JSON.stringify({
@@ -105,7 +107,7 @@ export function registerAnthropic(app: Hono, deps: AnthropicDeps): void {
       let onPush: (() => void) | null = null;
       const push = (t: string) => { queue.push(t); onPush?.(); };
       let runError: Error | null = null;
-      const run = deps.runChat(userText, push, sKey)
+      const run = deps.runChat(userText, push, sKey, c.req.raw.signal)
         .catch((e: unknown) => { runError = e instanceof Error ? e : new Error(String(e)); })
         .finally(() => { done = true; onPush?.(); });
 
@@ -115,7 +117,7 @@ export function registerAnthropic(app: Hono, deps: AnthropicDeps): void {
       while (!done || queue.length > 0) {
         while (queue.length > 0) {
           const chunk = queue.shift()!;
-          outputTokens += Math.ceil(chunk.length / 4);
+          outputTokens += approxTokens(chunk);
           totalLen += chunk.length;
           chunkCount++;
           dbg("delta", { len: chunk.length, preview: chunk.slice(0, 60) });

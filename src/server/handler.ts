@@ -19,6 +19,7 @@ export async function runChat(
   userText: string,
   onDelta?: (c: string) => void,
   sessionKey: string = DEFAULT_SESSION_KEY,
+  signal?: AbortSignal,
 ): Promise<{ replyText: string; messageId: string }> {
   const tls = await getTls();
   // The default key omits sessionState so it goes to the main chat
@@ -33,6 +34,7 @@ export async function runChat(
           client, userText, timezone: cfg.timezone, listenMs: 60_000,
           ...(state !== undefined ? { sessionState: state } : {}),
           ...(onDelta !== undefined ? { onDelta } : {}),
+          ...(signal !== undefined ? { signal } : {}),
         });
         return { replyText: r.replyText, messageId: r.messageId };
       } finally {

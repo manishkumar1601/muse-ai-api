@@ -11,6 +11,11 @@ export function sessionKeyFromReq(c: Context): string {
   });
 }
 
+// ponytail: chars/4 heuristic — Hatch exposes no tokenizer. Upgrade to tiktoken if clients care.
+export function approxTokens(s: string): number {
+  return Math.max(1, Math.ceil(s.length / 4));
+}
+
 export function flattenMessages(messages: ChatMessage[]): string {
   const out: string[] = [];
   for (const m of messages) {
