@@ -22,6 +22,7 @@ Dated session logs — one file per phase or significant chunk of work. Not refe
 | [05-10-2026-side-chat-routing.md](05-10-2026-side-chat-routing.md) | — | Per-API-session side-chat routing via `X-Muse-Session`. Dead ends, `/api/nodes/register` discovery, `/chat/history` fallback |
 | [16-11-2026-nov-hardening.md](16-11-2026-nov-hardening.md) | — | Debug gate, approx token counts, cancel-on-disconnect, serialize-pool, `x_muse_presentations` surfacing |
 | [16-11-2026-multiplex-pool.md](16-11-2026-multiplex-pool.md) | — | Per-stream dispatcher in HatchClient; serialize-pool → multiplex-pool |
+| [16-11-2026-attestation-scoping.md](16-11-2026-attestation-scoping.md) | — | Phase 8 scoping — AMD SEV-SNP, not ed25519. Why it's 1-2 weeks not 3-5 days |
 
 ## How to use
 

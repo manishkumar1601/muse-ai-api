@@ -104,7 +104,7 @@ Output: a drop-in muse.ai backend for any OpenAI or Anthropic SDK.
 
 | Not built | Why |
 |---|---|
-| Attestation chain verification | Phase 2 logs the mismatch but doesn't verify. Would require parsing `attestation_bundle.proto` and ed25519 sig verification. Non-trivial, not blocking usage. |
+| Attestation chain verification | The attestation is AMD SEV-SNP (not ed25519 as the docs originally said). Requires SNP report parsing per AMD spec §7.3, ECDSA-P384 VCEK→ASK→ARK chain validation, CRL check, and sigstore/cloudflare transparency proof verification. Realistic scope is 1-2 weeks + a captured msg2 bundle to validate against. See `memory/16-11-2026-attestation-scoping.md` for the breakdown. |
 | Multi-turn conversation threading in the proxy | Flattening works. Agent has its own server-side memory. |
 | — | — |
 | Real (tokenizer-accurate) token counts | Chars/4 estimate ships November 2026. Hatch still doesn't expose a tokenizer — tiktoken would be the upgrade. |
@@ -113,7 +113,7 @@ Output: a drop-in muse.ai backend for any OpenAI or Anthropic SDK.
 
 | Would-be-next | Rough estimate |
 |---|---|
-| Attestation verification (Phase 8) | 3-5 days |
+| Attestation verification (Phase 8 — AMD SEV-SNP, not ed25519) | 1-2 weeks + requires a captured msg2 bundle |
 | — | — |
 | Multi-turn session state | 1 day (keyed by request ID or user ID) |
 | Deploy as a hosted service with TLS + auth | 1 day |
