@@ -70,7 +70,7 @@ ANTHROPIC_MODEL=muse-spark  ANTHROPIC_DEFAULT_OPUS_MODEL=muse-spark
 - **Per-API-session side chats** — pass `X-Muse-Session: <any-string>` and the proxy creates a dedicated side chat on muse.ai for that key, continues it on subsequent calls, isolates history from other sessions. Omit the header → shared main chat (backward compatible). See [docs/architecture.md §2a](docs/architecture.md) and [memory/05-10-2026-side-chat-routing.md](memory/05-10-2026-side-chat-routing.md).
 - OpenAI `/v1/chat/completions` (stream + non-stream) and Anthropic `/v1/messages` (stream + non-stream) wire formats.
 - Automatic session re-bootstrap on first HatchClient open failure.
-- **Serialize-pool HatchClient** — one Noise handshake amortized across all requests; ~500 ms saved per request after the first. FIFO-serialized; closes + reopens on error.
+- **Multiplex-pool HatchClient** — one Noise handshake amortized across all requests; concurrent requests multiplex over a single WS via per-stream dispatch. First caller pays ~500 ms handshake; the rest overlap. Closes + reopens on error.
 - **Token counts** via `js-tiktoken` (`cl100k_base` encoder) on `usage` for both OpenAI and Anthropic, stream + non-stream. Accurate for GPT-4-family, close-enough for Claude. Chars/4 fallback if the encoder fails to load.
 - **Cancel-on-disconnect** — Hono's request `AbortSignal` is threaded through `runChat` into every poll loop; a dropped HTTP client breaks out of chat waits + returns partial text.
 - **Images / widgets / app cards** surfaced as vendor extension `x_muse_presentations` / `x_muse_presentation`. Main chat only.
@@ -81,7 +81,7 @@ ANTHROPIC_MODEL=muse-spark  ANTHROPIC_DEFAULT_OPUS_MODEL=muse-spark
 - `x_muse_presentations` is captured on the main chat only — side chat (`X-Muse-Session`) polls `/chat/history` and never sees `delta.*` events.
 - Multi-turn conversation threading is server-side only. The proxy flattens your `messages[]` into a single prompt per request.
 - Token counts use `cl100k_base` — accurate for OpenAI clients, approximate for Anthropic (Claude's vocab differs). Hatch itself exposes no tokenizer; this is a client-side estimate.
-- Pool is serialized (one in-flight request at a time). Per-stream multiplex is the upgrade path if throughput bites.
+- Pool multiplexes over one HatchClient; opening a second client is not implemented (if muse ever rate-limits per-WS we would need a client-set here).
 - Only tested on Windows 11 + Node 22. Most things should work elsewhere.
 
 ## Non-obvious things I discovered the hard way

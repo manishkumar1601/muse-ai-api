@@ -35,7 +35,7 @@ return await pool.withClient(async (client) => {
 });
 ```
 
-`src/hatch/pool.ts` holds one `HatchClient` in a FIFO-serialized slot. The first `withClient` call opens the WS + runs the Noise XX handshake (`src/noise/handshake.ts`, ~500 ms). Every subsequent call reuses the same client — the handshake cost is amortized across the proxy's lifetime. If `fn` throws, the pool closes the client and nulls the slot so the next caller opens fresh.
+`src/hatch/pool.ts` holds one `HatchClient` in a slot. Only the first open is mutex'd; after that concurrent `withClient` callers run `fn` in parallel on the same client. `HatchClient` runs a background dispatcher that routes decrypted events into per-`stream_id` queues; `recvOne(sid)` pops from the right queue so overlapping requests don't steal each other's events. The handshake cost is paid once by the first caller. If `fn` throws, the pool closes the client and nulls the slot; other in-flight callers see `"closed"` from `recvOne` and fall through to the handler's bootstrap retry path.
 
 If the first `pool.withClient` call fails (open or in-flight error), `src/server/handler.ts` calls `src/bootstrap/session.ts` to re-bootstrap and retries **once**.
 

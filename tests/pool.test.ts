@@ -20,19 +20,38 @@ test("pool opens exactly once and reuses the same client", async () => {
   assert.strictEqual(a, made.client);
 });
 
-test("pool serializes concurrent callers (no overlap)", async () => {
+test("pool allows concurrent callers (multiplex) sharing one client", async () => {
   const made = fakeClient(1);
   const pool = createClientPool({ openClient: async () => made.client });
   let inFlight = 0;
   let maxInFlight = 0;
-  const run = async () => pool.withClient(async () => {
+  const seenClients: Array<unknown> = [];
+  const run = async () => pool.withClient(async (c) => {
+    seenClients.push(c);
     inFlight++;
     maxInFlight = Math.max(maxInFlight, inFlight);
     await new Promise((r) => setTimeout(r, 20));
     inFlight--;
   });
   await Promise.all([run(), run(), run()]);
-  assert.equal(maxInFlight, 1);
+  assert.ok(maxInFlight >= 2, `expected concurrent overlap, got max ${maxInFlight}`);
+  assert.equal(new Set(seenClients).size, 1);
+});
+
+test("pool opens exactly once under concurrent first-call race", async () => {
+  let opens = 0;
+  const made = fakeClient(1);
+  const pool = createClientPool({ openClient: async () => {
+    opens++;
+    await new Promise((r) => setTimeout(r, 10));
+    return made.client;
+  } });
+  await Promise.all([
+    pool.withClient(async () => { /* a */ }),
+    pool.withClient(async () => { /* b */ }),
+    pool.withClient(async () => { /* c */ }),
+  ]);
+  assert.equal(opens, 1);
 });
 
 test("pool resets on error: closes broken client + reopens for next caller", async () => {
