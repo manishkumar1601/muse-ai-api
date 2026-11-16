@@ -71,7 +71,7 @@ ANTHROPIC_MODEL=muse-spark  ANTHROPIC_DEFAULT_OPUS_MODEL=muse-spark
 - OpenAI `/v1/chat/completions` (stream + non-stream) and Anthropic `/v1/messages` (stream + non-stream) wire formats.
 - Automatic session re-bootstrap on first HatchClient open failure.
 - **Serialize-pool HatchClient** — one Noise handshake amortized across all requests; ~500 ms saved per request after the first. FIFO-serialized; closes + reopens on error.
-- **Approximate token counts** (chars/4 heuristic) on `usage` for both OpenAI and Anthropic, stream + non-stream.
+- **Token counts** via `js-tiktoken` (`cl100k_base` encoder) on `usage` for both OpenAI and Anthropic, stream + non-stream. Accurate for GPT-4-family, close-enough for Claude. Chars/4 fallback if the encoder fails to load.
 - **Cancel-on-disconnect** — Hono's request `AbortSignal` is threaded through `runChat` into every poll loop; a dropped HTTP client breaks out of chat waits + returns partial text.
 - **Images / widgets / app cards** surfaced as vendor extension `x_muse_presentations` / `x_muse_presentation`. Main chat only.
 - **Opt-in debug log** — set `PROXY_DEBUG=1` to append per-chunk + per-poll diagnostics to `./proxy-debug.log`. Off by default.
@@ -80,7 +80,7 @@ ANTHROPIC_MODEL=muse-spark  ANTHROPIC_DEFAULT_OPUS_MODEL=muse-spark
 
 - `x_muse_presentations` is captured on the main chat only — side chat (`X-Muse-Session`) polls `/chat/history` and never sees `delta.*` events.
 - Multi-turn conversation threading is server-side only. The proxy flattens your `messages[]` into a single prompt per request.
-- Token counts are a chars/4 estimate, not real tokens. Hatch does not expose a tokenizer.
+- Token counts use `cl100k_base` — accurate for OpenAI clients, approximate for Anthropic (Claude's vocab differs). Hatch itself exposes no tokenizer; this is a client-side estimate.
 - Pool is serialized (one in-flight request at a time). Per-stream multiplex is the upgrade path if throughput bites.
 - Only tested on Windows 11 + Node 22. Most things should work elsewhere.
 

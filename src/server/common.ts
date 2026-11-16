@@ -1,4 +1,5 @@
 import type { Context } from "hono";
+import { getEncoding, type Tiktoken } from "js-tiktoken";
 import { deriveSessionKey } from "../hatch/sessions.js";
 
 interface ContentBlock { type: string; text?: string; }
@@ -11,8 +12,20 @@ export function sessionKeyFromReq(c: Context): string {
   });
 }
 
-// ponytail: chars/4 heuristic — Hatch exposes no tokenizer. Upgrade to tiktoken if clients care.
+// cl100k_base = GPT-4 / GPT-3.5-turbo encoder. Close-enough approximation for
+// Claude as well; still better than chars/4. Lazy-init + chars/4 fallback if
+// the encoder fails to load (keeps the proxy alive on exotic platforms).
+let enc: Tiktoken | null = null;
+let encTried = false;
 export function approxTokens(s: string): number {
+  if (!s) return 1;
+  if (!encTried) {
+    encTried = true;
+    try { enc = getEncoding("cl100k_base"); } catch { enc = null; }
+  }
+  if (enc !== null) {
+    try { return Math.max(1, enc.encode(s).length); } catch { /* fall through to heuristic */ }
+  }
   return Math.max(1, Math.ceil(s.length / 4));
 }
 
