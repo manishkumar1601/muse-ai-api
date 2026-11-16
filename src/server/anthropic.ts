@@ -39,14 +39,14 @@ export function registerAnthropic(app: Hono, deps: AnthropicDeps): void {
       return c.json({ error: { type: "invalid_request", message: "invalid JSON body" } }, 400);
     }
 
-    let chars = 0;
+    const parts: string[] = [];
     for (const m of body.messages ?? []) {
-      if (typeof m.content === "string") chars += m.content.length;
-      else for (const b of m.content) chars += b.text?.length ?? 0;
+      if (typeof m.content === "string") parts.push(m.content);
+      else for (const b of m.content) if (b.text) parts.push(b.text);
     }
-    if (typeof body.system === "string") chars += body.system.length;
+    if (typeof body.system === "string") parts.push(body.system);
 
-    return c.json({ input_tokens: Math.max(1, Math.floor(chars / 4)) });
+    return c.json({ input_tokens: approxTokens(parts.join("\n")) });
   });
 
   app.post("/v1/messages", async (c) => {

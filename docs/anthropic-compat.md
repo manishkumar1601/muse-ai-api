@@ -4,7 +4,7 @@
 
 ```
 POST  /v1/messages                stream + non-stream
-POST  /v1/messages/count_tokens   returns a crude chars/4 estimate
+POST  /v1/messages/count_tokens   returns a cl100k_base (GPT-4) token count — close-enough for Claude too
 ```
 
 Auth: `x-api-key: <anything>` or `Authorization: Bearer <anything>` if `MUSE_PROXY_KEY` is unset.
@@ -166,7 +166,7 @@ data: {"type":"message_stop"}
 ## Known differences from real Anthropic
 
 - `max_tokens`, `temperature`, `top_p`, `top_k`, `stop_sequences` — all **silently ignored**.
-- `usage.input_tokens` + `usage.output_tokens` are chars/4 estimates, not tokenizer-accurate. `message_start` carries input, `message_delta` carries output, matching the real Anthropic SSE shape.
+- `usage.input_tokens` + `usage.output_tokens` are `cl100k_base` (GPT-4 tokenizer via `js-tiktoken`) counts. Claude uses a different vocabulary — these are close but not exact for Anthropic clients. `message_start` carries input, `message_delta` carries output, matching the real Anthropic SSE shape.
 - `x_muse_presentations` on non-stream responses, and `event: x_muse_presentation` SSE frames on streams, carry muse widget / card / inline-option payloads as a vendor extension. Anthropic SDKs ignore unknown events; opt-in clients can read them. Main chat only — side-chat (`X-Muse-Session`) polls `/chat/history` and never sees these events.
 - No tool-use (`tools` / `tool_use` content blocks). Hatch's connectors are server-side-only.
 - No vision / image content blocks on input. (The agent may support them server-side but we don't pass them through.)
