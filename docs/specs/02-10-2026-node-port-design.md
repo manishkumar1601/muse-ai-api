@@ -7,11 +7,14 @@ Replace the Python phase1/-phase7/ implementation with a single TypeScript proje
 ## Non-goals
 
 - Multi-user hosting, authn beyond a shared `MUSE_PROXY_KEY`.
-- Noise connection pooling (fresh session per request matches Python; add later if measured need).
-- Real token counts in `usage` (Hatch doesn't expose a tokenizer).
-- Request cancellation on client disconnect (add if a caller complains).
-- Image / widget / `delta.presentation` surfacing to the OpenAI/Anthropic clients.
 - Attestation chain verification (same deferred decision as Python).
+
+Items originally deferred that have since landed (November 2026 — see `memory/16-11-2026-nov-hardening.md`):
+
+- Serialize-pool across requests (~500 ms handshake saved).
+- Approximate token counts (chars/4 heuristic) on both proxies.
+- Cancel-on-disconnect via `AbortSignal` thread.
+- `delta.presentation` + widget surfacing via vendor-extension `x_muse_presentations`.
 
 ## Behavioural parity requirements
 

@@ -2,6 +2,10 @@
 
 Searchable by error string.
 
+## Need to see what the proxy is doing?
+
+Set `PROXY_DEBUG=1` before `npm start`. The proxy appends every text delta, every side-chat `/chat/history` poll, and every stream close to `./proxy-debug.log` in the repo root. Off by default so a long-running proxy doesn't grow a GB log file. Delete the file between runs — it's append-only.
+
 ## HTTP 403 `{"error":"Forbidden"}` on `/api/hatch/*`
 
 **Cause:** TLS or UA fingerprint mismatch. Session cookies are bound to the browser (User-Agent + sec-ch-ua) that minted them.

@@ -70,14 +70,18 @@ ANTHROPIC_MODEL=muse-spark  ANTHROPIC_DEFAULT_OPUS_MODEL=muse-spark
 - **Per-API-session side chats** — pass `X-Muse-Session: <any-string>` and the proxy creates a dedicated side chat on muse.ai for that key, continues it on subsequent calls, isolates history from other sessions. Omit the header → shared main chat (backward compatible). See [docs/architecture.md §2a](docs/architecture.md) and [memory/05-10-2026-side-chat-routing.md](memory/05-10-2026-side-chat-routing.md).
 - OpenAI `/v1/chat/completions` (stream + non-stream) and Anthropic `/v1/messages` (stream + non-stream) wire formats.
 - Automatic session re-bootstrap on first HatchClient open failure.
+- **Serialize-pool HatchClient** — one Noise handshake amortized across all requests; ~500 ms saved per request after the first. FIFO-serialized; closes + reopens on error.
+- **Approximate token counts** (chars/4 heuristic) on `usage` for both OpenAI and Anthropic, stream + non-stream.
+- **Cancel-on-disconnect** — Hono's request `AbortSignal` is threaded through `runChat` into every poll loop; a dropped HTTP client breaks out of chat waits + returns partial text.
+- **Images / widgets / app cards** surfaced as vendor extension `x_muse_presentations` / `x_muse_presentation`. Main chat only.
+- **Opt-in debug log** — set `PROXY_DEBUG=1` to append per-chunk + per-poll diagnostics to `./proxy-debug.log`. Off by default.
 
 ## Known limits
 
-- Images / widgets / app cards (`delta.presentation`, `widget.state_updated`, `delta.inline_option`, `task.status`, `approvals.snapshot`) are surfaced as a vendor extension: `x_muse_presentations: PresentationEvent[]` on non-stream responses, `x_muse_presentation` SSE events (Anthropic) or chunks with `choices: []` + `x_muse_presentation` (OpenAI) on streams. Standard clients ignore the extra fields; opt-in clients can read them. Main chat only — side-chat (`X-Muse-Session`) polls `/chat/history` and never sees these events.
+- `x_muse_presentations` is captured on the main chat only — side chat (`X-Muse-Session`) polls `/chat/history` and never sees `delta.*` events.
 - Multi-turn conversation threading is server-side only. The proxy flattens your `messages[]` into a single prompt per request.
-- Faked token counts (zeros). Hatch does not expose a tokenizer.
-- No cancel-on-disconnect. A dropped client doesn't abort the in-flight Hatch request.
-- No connection pooling — one Noise handshake per proxy request (~500 ms).
+- Token counts are a chars/4 estimate, not real tokens. Hatch does not expose a tokenizer.
+- Pool is serialized (one in-flight request at a time). Per-stream multiplex is the upgrade path if throughput bites.
 - Only tested on Windows 11 + Node 22. Most things should work elsewhere.
 
 ## Non-obvious things I discovered the hard way

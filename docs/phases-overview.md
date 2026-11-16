@@ -88,7 +88,7 @@ Output: `phase4/chat.py` can now take a user prompt and return the agent's full 
 
 Was going to be "production hardening" (reconnect / token refresh / threading). Scope-reduced to a single feature: Phase 7's server auto-reruns `bootstrap.py` once on first `HatchClient` failure.
 
-Rest of Phase 6 (connection pooling, cancel-on-disconnect, real token counts) deliberately skipped — add when a real user complains.
+Phase 6 items (connection pooling, cancel-on-disconnect, approximate token counts) landed in November 2026 — see `memory/16-11-2026-nov-hardening.md`.
 
 ## Phase 7 — OpenAI + Anthropic compat proxy (`phase7/`)
 
@@ -106,18 +106,15 @@ Output: a drop-in muse.ai backend for any OpenAI or Anthropic SDK.
 |---|---|
 | Attestation chain verification | Phase 2 logs the mismatch but doesn't verify. Would require parsing `attestation_bundle.proto` and ed25519 sig verification. Non-trivial, not blocking usage. |
 | Multi-turn conversation threading in the proxy | Flattening works. Agent has its own server-side memory. |
-| Image / widget / presentation surfacing | Hatch pushes `delta.presentation` events; proxy ignores them. Add if a caller needs. |
-| Real token counts | Hatch doesn't expose a tokenizer. Could estimate client-side with tiktoken but faked zeros are more honest. |
-| Cancel on client disconnect | `delta.message_done` always arrives eventually; client-disconnect-aborts-generation is a nice-to-have. |
-| Noise connection pooling | ~500ms per request handshake overhead is tolerable. Pooling adds complexity around register-capabilities scoping. |
+| Multiplex over the pool | Serialize-pool ships November 2026. Per-stream `recvOne` multiplex is the next step if concurrency matters. |
+| Real (tokenizer-accurate) token counts | Chars/4 estimate ships November 2026. Hatch still doesn't expose a tokenizer — tiktoken would be the upgrade. |
 
 ## Timing budget (if you continue)
 
 | Would-be-next | Rough estimate |
 |---|---|
 | Attestation verification (Phase 8) | 3-5 days |
-| Connection pooling | 1-2 days |
-| Widget / presentation surfacing | 1-2 days per widget type |
+| Per-stream multiplex over the pool | 1-2 days |
 | Multi-turn session state | 1 day (keyed by request ID or user ID) |
 | Deploy as a hosted service with TLS + auth | 1 day |
 

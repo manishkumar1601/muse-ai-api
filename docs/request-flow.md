@@ -26,20 +26,18 @@ Middleware logs `[req ] POST /v1/chat/completions`. Handler calls `extractUserTe
 
 The `SessionStore` (in-memory map, 24h sliding TTL, LRU eviction) issues a stable `{sessionId, nodeId}` per sessionKey. `sessionId` is a client-chosen UUID that first-use creates the side chat on muse; `nodeId` identifies our client across calls so muse routes replies back to us.
 
-## 2. Fresh Noise session
+## 2. Pool checkout (fresh Noise session on first request only)
 
 ```ts
-const client = new HatchClient({ sessionPath: "./session.json" });
-// This:
-// a) Opens WS via globalThis.WebSocket(sess.ws_url)
-// b) Noise XX handshake (src/noise/handshake.ts):
-//    - writeMessage(0x0a 0x20 + randomBytes(32)) -> send msg1 (66B)
-//    - recv -> readMessage(msg2) decrypts 70B payload
-//    - writeMessage(new Uint8Array(0)) -> send msg3 (64B)
-// c) [csSend, csRecv] = hs.split()
+const pool = getPool(cfg);                  // module-level singleton in src/server/handler.ts
+return await pool.withClient(async (client) => {
+    // ...register + subscribe + stream + collect
+});
 ```
 
-If step (a) fails, `src/server/handler.ts` calls `src/bootstrap/session.ts` to re-bootstrap and retries **once**.
+`src/hatch/pool.ts` holds one `HatchClient` in a FIFO-serialized slot. The first `withClient` call opens the WS + runs the Noise XX handshake (`src/noise/handshake.ts`, ~500 ms). Every subsequent call reuses the same client — the handshake cost is amortized across the proxy's lifetime. If `fn` throws, the pool closes the client and nulls the slot so the next caller opens fresh.
+
+If the first `pool.withClient` call fails (open or in-flight error), `src/server/handler.ts` calls `src/bootstrap/session.ts` to re-bootstrap and retries **once**.
 
 ## 3. Register as the push target
 
@@ -128,8 +126,19 @@ while (!done && Date.now() < deadline) {
     if (r.obj.event === "delta.text_append")  textParts.push(r.obj.payload.text);
     if (r.obj.event === "delta.message_done") { ...pull transcript if empty; break }
     if (r.obj.event === "message.assistant")  { ...push display_text; break }
+
+    // Widget / card / inline-option events are collected into `presentations[]`
+    // and forwarded to the server layer as they arrive; see §7 for the wire
+    // extension used to surface them. Main chat only — side-chat polling never
+    // sees these events.
+    if (PRESENTATION_KINDS.has(r.obj.event)) {
+        presentations.push({ kind: r.obj.event, ts_ms: r.obj.ts_ms, payload: r.obj.payload });
+        onPresentation?.(last);
+    }
 }
 ```
+
+The loop also respects `args.signal?.aborted` — a disconnected HTTP client sets the signal, every `while` condition checks it, and the loop breaks with whatever text was collected.
 
 **Fallback — side chat first-message race:** if a side chat yields no text parts after the loop finishes, poll `GET /chat/history?limit=40&transcript_mode=messages&session_id=<thread>` and extract the first `message.assistant` entry whose index is after our sent `message_id`. The thread existed on the server before subscribe attached, so the stored reply is always retrievable.
 
@@ -138,8 +147,10 @@ while (!done && Date.now() < deadline) {
 **Non-streaming request** → return a single JSON (OpenAI or Anthropic format, see `openai-compat.md` / `anthropic-compat.md`).
 
 **Streaming request** → Hono `streamSSE` wraps an async generator that pulls deltas and emits SSE lines in the right format:
-- OpenAI: `data: {chunk json}\n\n`, then `data: [DONE]\n\n`
-- Anthropic: `event: X\ndata: {json}\n\n` for each of `message_start`, `content_block_start`, `content_block_delta` ×N, `content_block_stop`, `message_delta`, `message_stop`.
+- OpenAI: `data: {chunk json}\n\n`, then an optional `data: {choices: [], usage: {...}}` chunk, then `data: [DONE]\n\n`. Presentation events (if any) interleave as `data: {choices: [], x_muse_presentation: {...}}` chunks in arrival order.
+- Anthropic: `event: X\ndata: {json}\n\n` for each of `message_start`, `content_block_start`, `content_block_delta` ×N, `content_block_stop`, `message_delta`, `message_stop`. Presentation events interleave as `event: x_muse_presentation\ndata: {json}` frames in arrival order.
+
+**Non-streaming request** carries `usage: {prompt_tokens, completion_tokens, total_tokens}` (OpenAI) or `usage: {input_tokens, output_tokens}` (Anthropic) computed as chars/4. If any presentations were captured, a top-level `x_muse_presentations: PresentationEvent[]` is attached. Not a tokenizer, just an estimate — Hatch exposes no token count.
 
 ## 8. Close
 
