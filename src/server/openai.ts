@@ -3,13 +3,13 @@ import { streamSSE } from "hono/streaming";
 import type { Hono } from "hono";
 import type { Config } from "../config.js";
 import { requireAuth } from "./auth.js";
-import { flattenMessages, sessionKeyFromReq } from "./common.js";
+import { approxTokens, flattenMessages, sessionKeyFromReq } from "./common.js";
 import type { ChatMessage } from "./common.js";
 import { logger } from "../log.js";
 
 export interface OpenAIDeps {
   cfg: Config;
-  runChat(userText: string, onDelta?: (chunk: string) => void, sessionKey?: string): Promise<{ replyText: string; messageId: string }>;
+  runChat(userText: string, onDelta?: (chunk: string) => void, sessionKey?: string, signal?: AbortSignal): Promise<{ replyText: string; messageId: string }>;
 }
 
 export function registerOpenAI(app: Hono, deps: OpenAIDeps): void {
@@ -47,18 +47,20 @@ export function registerOpenAI(app: Hono, deps: OpenAIDeps): void {
     if (!stream) {
       let r: { replyText: string; messageId: string };
       try {
-        r = await deps.runChat(userText, undefined, sKey);
+        r = await deps.runChat(userText, undefined, sKey, c.req.raw.signal);
       } catch (e) {
         const msg = e instanceof Error ? e.message : String(e);
         return c.json({ error: { type: "service_unavailable", message: msg } }, 503);
       }
+      const pt = approxTokens(userText);
+      const ct = approxTokens(r.replyText);
       return c.json({
         id: `chatcmpl-${r.messageId}`,
         object: "chat.completion",
         created: Math.floor(Date.now() / 1000),
         model,
         choices: [{ index: 0, message: { role: "assistant", content: r.replyText }, finish_reason: "stop" }],
-        usage: { prompt_tokens: 0, completion_tokens: 0, total_tokens: 0 },
+        usage: { prompt_tokens: pt, completion_tokens: ct, total_tokens: pt + ct },
       });
     }
 
@@ -77,13 +79,15 @@ export function registerOpenAI(app: Hono, deps: OpenAIDeps): void {
       let onPush: (() => void) | null = null;
       const push = (t: string) => { queue.push(t); onPush?.(); };
       let runError: Error | null = null;
-      const run = deps.runChat(userText, push, sKey)
+      const run = deps.runChat(userText, push, sKey, c.req.raw.signal)
         .catch((e: unknown) => { runError = e instanceof Error ? e : new Error(String(e)); })
         .finally(() => { done = true; onPush?.(); });
 
+      let completionTokens = 0;
       while (!done || queue.length > 0) {
         while (queue.length > 0) {
           const chunk = queue.shift()!;
+          completionTokens += approxTokens(chunk);
           await s.writeSSE({ data: JSON.stringify({
             id, object: "chat.completion.chunk", created, model,
             choices: [{ index: 0, delta: { content: chunk }, finish_reason: null }],
@@ -116,6 +120,12 @@ export function registerOpenAI(app: Hono, deps: OpenAIDeps): void {
       await s.writeSSE({ data: JSON.stringify({
         id, object: "chat.completion.chunk", created, model,
         choices: [{ index: 0, delta: {}, finish_reason: "stop" }],
+      }) });
+      const pt = approxTokens(userText);
+      await s.writeSSE({ data: JSON.stringify({
+        id, object: "chat.completion.chunk", created, model,
+        choices: [],
+        usage: { prompt_tokens: pt, completion_tokens: completionTokens, total_tokens: pt + completionTokens },
       }) });
       await s.writeSSE({ data: "[DONE]" });
     });

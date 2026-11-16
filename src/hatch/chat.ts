@@ -4,7 +4,7 @@ import type { HatchClient } from "./client.js";
 import type { ChatSessionState } from "./sessions.js";
 import { logger } from "../log.js";
 
-const DEBUG = process.env["PROXY_DEBUG"] !== "0";
+const DEBUG = process.env["PROXY_DEBUG"] === "1";
 const dbg = (tag: string, data: unknown): void => {
   if (!DEBUG) return;
   try { appendFileSync("proxy-debug.log", `[${new Date().toISOString()}] chat.${tag}: ${JSON.stringify(data)}\n`); } catch {}
@@ -25,6 +25,7 @@ export interface SendAndCollectArgs {
   onDelta?: (chunk: string) => void;
   clientId?: string;
   sessionState?: ChatSessionState;
+  signal?: AbortSignal;
 }
 
 export interface SendAndCollectResult {
@@ -76,7 +77,7 @@ export async function sendAndCollectReply(
   let ackMessageId: string | undefined;
   const deadline = Date.now() + args.listenMs;
 
-  outer: while (Date.now() < deadline) {
+  outer: while (!args.signal?.aborted && Date.now() < deadline) {
     if (sendSid === null && args.client.hasResponded(subscribeSid)) {
       sendStartMs = Date.now();
       sendSid = args.client.request("POST", "/chat/stream", streamBody);
@@ -157,7 +158,7 @@ async function sideChatSendAndPoll(
   // Wait for the sync ack (gives us message_id).
   let ackMessageId: string | undefined;
   const ackDeadline = Date.now() + 10_000;
-  while (!ackMessageId && Date.now() < ackDeadline) {
+  while (!ackMessageId && !args.signal?.aborted && Date.now() < ackDeadline) {
     const r = await args.client.recvOne();
     if (r === null) continue;
     if (r === "closed") break;
@@ -180,11 +181,11 @@ async function sideChatSendAndPoll(
   const deadline = Date.now() + args.listenMs;
   let lastText: string | null = null;
   let emittedLen = 0;
-  while (Date.now() < deadline) {
+  while (!args.signal?.aborted && Date.now() < deadline) {
     const sid = args.client.request("GET", path);
     const pollDeadline = Math.min(Date.now() + 3000, deadline);
     let currentText: string | null = null;
-    while (Date.now() < pollDeadline) {
+    while (!args.signal?.aborted && Date.now() < pollDeadline) {
       const r = await args.client.recvOne();
       if (r === null) continue;
       if (r === "closed") break;
