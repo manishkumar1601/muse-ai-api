@@ -4,6 +4,8 @@
 **/cookies.json
 **/events.json
 **/chat_out.log
+**/attestation-dump.json
+**/proxy-debug.log
 
 # Phase 2 raw recorded Noise frames
 **/frames/
