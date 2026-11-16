@@ -6,6 +6,7 @@ import type { Config } from "../config.js";
 import { requireAuth } from "./auth.js";
 import { approxTokens, flattenMessages, sessionKeyFromReq } from "./common.js";
 import type { ChatMessage } from "./common.js";
+import type { PresentationEvent } from "../hatch/chat.js";
 
 const DEBUG = process.env["PROXY_DEBUG"] === "1";
 const dbg = (tag: string, data: unknown): void => {
@@ -15,7 +16,13 @@ const dbg = (tag: string, data: unknown): void => {
 
 export interface AnthropicDeps {
   cfg: Config;
-  runChat(userText: string, onDelta?: (chunk: string) => void, sessionKey?: string, signal?: AbortSignal): Promise<{ replyText: string; messageId: string }>;
+  runChat(
+    userText: string,
+    onDelta?: (chunk: string) => void,
+    sessionKey?: string,
+    signal?: AbortSignal,
+    onPresentation?: (p: PresentationEvent) => void,
+  ): Promise<{ replyText: string; messageId: string; presentations?: PresentationEvent[] }>;
 }
 
 export function registerAnthropic(app: Hono, deps: AnthropicDeps): void {
@@ -68,7 +75,7 @@ export function registerAnthropic(app: Hono, deps: AnthropicDeps): void {
     const sKey = sessionKeyFromReq(c);
 
     if (!stream) {
-      let r: { replyText: string; messageId: string };
+      let r: { replyText: string; messageId: string; presentations?: PresentationEvent[] };
       try {
         r = await deps.runChat(userText, undefined, sKey, c.req.raw.signal);
       } catch (e) {
@@ -77,6 +84,7 @@ export function registerAnthropic(app: Hono, deps: AnthropicDeps): void {
       }
       const it = approxTokens(userText);
       const ot = approxTokens(r.replyText);
+      const pres = r.presentations ?? [];
       return c.json({
         id: `msg_${r.messageId}`,
         type: "message",
@@ -86,6 +94,7 @@ export function registerAnthropic(app: Hono, deps: AnthropicDeps): void {
         stop_reason: "end_turn",
         stop_sequence: null,
         usage: { input_tokens: it, output_tokens: ot },
+        ...(pres.length > 0 ? { x_muse_presentations: pres } : {}),
       });
     }
 
@@ -102,12 +111,14 @@ export function registerAnthropic(app: Hono, deps: AnthropicDeps): void {
         type: "content_block_start", index: 0, content_block: { type: "text", text: "" },
       }) });
 
-      const queue: string[] = [];
+      type QItem = { t: "text"; v: string } | { t: "pres"; v: PresentationEvent };
+      const queue: QItem[] = [];
       let done = false;
       let onPush: (() => void) | null = null;
-      const push = (t: string) => { queue.push(t); onPush?.(); };
+      const push = (t: string) => { queue.push({ t: "text", v: t }); onPush?.(); };
+      const pushPres = (p: PresentationEvent) => { queue.push({ t: "pres", v: p }); onPush?.(); };
       let runError: Error | null = null;
-      const run = deps.runChat(userText, push, sKey, c.req.raw.signal)
+      const run = deps.runChat(userText, push, sKey, c.req.raw.signal, pushPres)
         .catch((e: unknown) => { runError = e instanceof Error ? e : new Error(String(e)); })
         .finally(() => { done = true; onPush?.(); });
 
@@ -116,7 +127,12 @@ export function registerAnthropic(app: Hono, deps: AnthropicDeps): void {
       let chunkCount = 0;
       while (!done || queue.length > 0) {
         while (queue.length > 0) {
-          const chunk = queue.shift()!;
+          const item = queue.shift()!;
+          if (item.t === "pres") {
+            await s.writeSSE({ event: "x_muse_presentation", data: JSON.stringify(item.v) });
+            continue;
+          }
+          const chunk = item.v;
           outputTokens += approxTokens(chunk);
           totalLen += chunk.length;
           chunkCount++;

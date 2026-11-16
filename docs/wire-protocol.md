@@ -147,8 +147,9 @@ Observed event names so far:
 - `delta.message_start` — assistant message begins
 - `delta.text_append` — one chunk of streamed assistant text (field: `payload.text` or `payload.delta`)
 - `delta.message_done` — assistant message complete; full text available in `payload.transcript.messages[*].content[*].text`
-- `delta.presentation` — assistant pushes a widget/card (not surfaced by our proxy yet)
-- `widget.state_updated` — widget state change
+- `delta.presentation` — assistant pushes a widget/card (surfaced via `x_muse_presentations` on both proxies; see `docs/openai-compat.md` and `docs/anthropic-compat.md`)
+- `widget.state_updated` — widget state change (also surfaced)
+- `delta.inline_option`, `task.status`, `approvals.snapshot` — also surfaced
 - `task.status` — background task progress
 - `approvals.snapshot` — pending approvals
 - `chat.seen` — read receipt

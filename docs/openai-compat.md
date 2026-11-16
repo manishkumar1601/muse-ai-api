@@ -143,7 +143,8 @@ Standard OpenAI SSE. First chunk emits the role, subsequent chunks are content d
 ## Known differences from real OpenAI
 
 - All sampling knobs (`temperature`, `top_p`, `max_tokens`, `n`, `logit_bias`, `tools`, `tool_choice`, `response_format`, ...) are **silently ignored**.
-- `usage` is always zeros.
+- `usage` is a chars/4 estimate, not a tokenizer-accurate count. Stream responses emit a final `choices: []` chunk with `usage` per the OpenAI "include_usage" convention.
+- `x_muse_presentations` on non-stream responses, and `data: {choices: [], x_muse_presentation: {...}}` chunks on streams, carry muse widget/card/inline-option payloads as a vendor extension. Standard SDKs ignore the extra fields.
 - No `logprobs`.
 - No function/tool calling. Hatch has its own tools (connectors) which fire server-side when the agent decides; the OpenAI client won't see them.
 - Multi-turn `messages` arrays are flattened into one prompt — the proxy doesn't maintain cross-request conversation state. Server-side agent memory may still kick in because you're using your real Meta account.

@@ -5,11 +5,18 @@ import type { Config } from "../config.js";
 import { requireAuth } from "./auth.js";
 import { approxTokens, flattenMessages, sessionKeyFromReq } from "./common.js";
 import type { ChatMessage } from "./common.js";
+import type { PresentationEvent } from "../hatch/chat.js";
 import { logger } from "../log.js";
 
 export interface OpenAIDeps {
   cfg: Config;
-  runChat(userText: string, onDelta?: (chunk: string) => void, sessionKey?: string, signal?: AbortSignal): Promise<{ replyText: string; messageId: string }>;
+  runChat(
+    userText: string,
+    onDelta?: (chunk: string) => void,
+    sessionKey?: string,
+    signal?: AbortSignal,
+    onPresentation?: (p: PresentationEvent) => void,
+  ): Promise<{ replyText: string; messageId: string; presentations?: PresentationEvent[] }>;
 }
 
 export function registerOpenAI(app: Hono, deps: OpenAIDeps): void {
@@ -45,7 +52,7 @@ export function registerOpenAI(app: Hono, deps: OpenAIDeps): void {
     const sKey = sessionKeyFromReq(c);
 
     if (!stream) {
-      let r: { replyText: string; messageId: string };
+      let r: { replyText: string; messageId: string; presentations?: PresentationEvent[] };
       try {
         r = await deps.runChat(userText, undefined, sKey, c.req.raw.signal);
       } catch (e) {
@@ -54,6 +61,7 @@ export function registerOpenAI(app: Hono, deps: OpenAIDeps): void {
       }
       const pt = approxTokens(userText);
       const ct = approxTokens(r.replyText);
+      const pres = r.presentations ?? [];
       return c.json({
         id: `chatcmpl-${r.messageId}`,
         object: "chat.completion",
@@ -61,6 +69,7 @@ export function registerOpenAI(app: Hono, deps: OpenAIDeps): void {
         model,
         choices: [{ index: 0, message: { role: "assistant", content: r.replyText }, finish_reason: "stop" }],
         usage: { prompt_tokens: pt, completion_tokens: ct, total_tokens: pt + ct },
+        ...(pres.length > 0 ? { x_muse_presentations: pres } : {}),
       });
     }
 
@@ -74,19 +83,29 @@ export function registerOpenAI(app: Hono, deps: OpenAIDeps): void {
         choices: [{ index: 0, delta: { role: "assistant", content: "" }, finish_reason: null }],
       }) });
 
-      const queue: string[] = [];
+      type QItem = { t: "text"; v: string } | { t: "pres"; v: PresentationEvent };
+      const queue: QItem[] = [];
       let done = false;
       let onPush: (() => void) | null = null;
-      const push = (t: string) => { queue.push(t); onPush?.(); };
+      const push = (t: string) => { queue.push({ t: "text", v: t }); onPush?.(); };
+      const pushPres = (p: PresentationEvent) => { queue.push({ t: "pres", v: p }); onPush?.(); };
       let runError: Error | null = null;
-      const run = deps.runChat(userText, push, sKey, c.req.raw.signal)
+      const run = deps.runChat(userText, push, sKey, c.req.raw.signal, pushPres)
         .catch((e: unknown) => { runError = e instanceof Error ? e : new Error(String(e)); })
         .finally(() => { done = true; onPush?.(); });
 
       let completionTokens = 0;
       while (!done || queue.length > 0) {
         while (queue.length > 0) {
-          const chunk = queue.shift()!;
+          const item = queue.shift()!;
+          if (item.t === "pres") {
+            await s.writeSSE({ data: JSON.stringify({
+              id, object: "chat.completion.chunk", created, model,
+              choices: [], x_muse_presentation: item.v,
+            }) });
+            continue;
+          }
+          const chunk = item.v;
           completionTokens += approxTokens(chunk);
           await s.writeSSE({ data: JSON.stringify({
             id, object: "chat.completion.chunk", created, model,

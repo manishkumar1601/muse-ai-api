@@ -107,11 +107,11 @@ HTTP calls use `cycletls` for HTTP; the WS upgrade itself uses Node's native `gl
 
 ## Concurrency model
 
-Each incoming OpenAI/Anthropic request → one fresh Noise handshake → one send-and-collect round-trip. Handshake overhead ~500ms per request. Not pooled.
+Each incoming OpenAI/Anthropic request → serialize-pool checkout → send-and-collect round-trip → return to pool. The first request pays the ~500 ms Noise handshake; subsequent requests reuse the same `HatchClient`. On any error the pool closes + nulls the client so the next caller opens a fresh one. Pool is FIFO-serialized (one in-flight request at a time); multiplex is the upgrade path. See `src/hatch/pool.ts`.
 
 The Hono server is async-native. Hatch work runs inside an async flow with streaming deltas pushed through Node.js readable streams to the SSE generator.
 
 ## State
 
 - **Persistent across runs:** `~/.ssh/*` (your git keys), `./storage_state.json` (your muse.ai cookies), `./session.json` (last-bootstrapped tokens).
-- **Rebuilt per run:** everything else. Noise keys are per-handshake; stream_ids per-connection; the WS session itself is per-request.
+- **Rebuilt per run:** everything else. Noise keys are per-handshake; stream_ids per-connection; the WS session is per-pool-lifetime (lazily opened on first request; closed + reopened on error).

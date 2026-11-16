@@ -166,9 +166,10 @@ data: {"type":"message_stop"}
 ## Known differences from real Anthropic
 
 - `max_tokens`, `temperature`, `top_p`, `top_k`, `stop_sequences` — all **silently ignored**.
-- `usage.input_tokens` is always 0 (`count_tokens` returns a crude estimate but the actual message endpoints don't track it).
+- `usage.input_tokens` + `usage.output_tokens` are chars/4 estimates, not tokenizer-accurate. `message_start` carries input, `message_delta` carries output, matching the real Anthropic SSE shape.
+- `x_muse_presentations` on non-stream responses, and `event: x_muse_presentation` SSE frames on streams, carry muse widget / card / inline-option payloads as a vendor extension. Anthropic SDKs ignore unknown events; opt-in clients can read them. Main chat only — side-chat (`X-Muse-Session`) polls `/chat/history` and never sees these events.
 - No tool-use (`tools` / `tool_use` content blocks). Hatch's connectors are server-side-only.
-- No vision / image content blocks. (The agent may support them server-side but we don't pass them through.)
+- No vision / image content blocks on input. (The agent may support them server-side but we don't pass them through.)
 - No `metadata.user_id`, no `anthropic-beta` features.
 - Multi-turn `messages[]` is flattened into one prompt. Server-side agent memory is independent.
 

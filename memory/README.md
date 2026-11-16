@@ -20,6 +20,7 @@ Dated session logs — one file per phase or significant chunk of work. Not refe
 | [02-10-2026-claude-code-integration-test.md](02-10-2026-claude-code-integration-test.md) | 7 | Pointed Claude Code at the proxy. Had to add chunking + count_tokens stub |
 | [02-10-2026-node-port.md](02-10-2026-node-port.md) | — | Python → Node.js TypeScript port. Swap list, gotchas, 10 rulings, 27-commit history |
 | [05-10-2026-side-chat-routing.md](05-10-2026-side-chat-routing.md) | — | Per-API-session side-chat routing via `X-Muse-Session`. Dead ends, `/api/nodes/register` discovery, `/chat/history` fallback |
+| [16-11-2026-nov-hardening.md](16-11-2026-nov-hardening.md) | — | Debug gate, approx token counts, cancel-on-disconnect, serialize-pool, `x_muse_presentations` surfacing |
 
 ## How to use
 
