@@ -1,0 +1,49 @@
+# Project status
+
+**Last updated:** 2026-11-16
+
+One table, two columns: what's shipped, what isn't yet. If you're picking the project up on a new machine or after a break, start here.
+
+## Shipped
+
+| Feature | Where it lives | Memory note |
+|---|---|---|
+| Bootstrap flow (browser-mint `session.json`, auto re-bootstrap on first failure) | `src/bootstrap/`, `scripts/login.ts`, `src/server/handler.ts` | `01-10-2026-phase-1-bootstrap.md` |
+| Noise XX handshake (`Noise_XX_25519_AESGCM_SHA256`) | `src/noise/` | `02-10-2026-phase-2-noise-handshake.md` |
+| HTTP-over-Noise transport, ServiceFrame envelope, 48 KB chunking | `src/hatch/envelope.ts`, `transport.ts` | `02-10-2026-phase-4-chat-send.md` |
+| Main-chat streaming (`delta.text_append` reassembly, replay filter) | `src/hatch/chat.ts` | `02-10-2026-phase-5-streaming-reply.md` |
+| Side-chat routing via `X-Muse-Session` (poll-until-stable fallback) | `src/hatch/chat.ts`, `src/hatch/sessions.ts` | `05-10-2026-side-chat-routing.md` |
+| OpenAI `/v1/chat/completions` + `/v1/models` (stream + non-stream) | `src/server/openai.ts` | `02-10-2026-phase-7-openai-anthropic-proxy.md` |
+| Anthropic `/v1/messages` + `/v1/messages/count_tokens` (stream + non-stream) | `src/server/anthropic.ts` | `02-10-2026-phase-7-openai-anthropic-proxy.md` |
+| Opt-in debug log (`PROXY_DEBUG=1 → ./proxy-debug.log`) | `src/server/anthropic.ts`, `src/hatch/chat.ts` | `16-11-2026-nov-hardening.md` |
+| Token counts via `js-tiktoken` (`cl100k_base`), chars/4 fallback | `src/server/common.ts` | `16-11-2026-nov-hardening.md` (initial), tiktoken swap on branch `feat/tiktoken-counts` |
+| Cancel-on-disconnect (Hono `AbortSignal` threaded through `runChat` + all poll loops) | `src/hatch/chat.ts`, `src/server/{openai,anthropic,handler,start}.ts` | `16-11-2026-nov-hardening.md` |
+| Vendor-extension widget / card / inline-option surfacing (`x_muse_presentations` / `x_muse_presentation`) — main chat only | `src/hatch/chat.ts`, `src/server/{openai,anthropic}.ts` | `16-11-2026-nov-hardening.md` |
+| Multiplex-pool HatchClient (per-stream dispatcher, concurrent requests on one WS, lazy-open mutex) | `src/hatch/pool.ts`, `src/hatch/client.ts`, `src/hatch/chat.ts` | `16-11-2026-multiplex-pool.md` |
+| Attestation dump (`DUMP_ATTESTATION=1 → attestation-dump.json`) | `src/hatch/client.ts` | `16-11-2026-attestation-finding.md` |
+| Attestation parser + `inspect:attestation` CLI (AMD SEV-SNP report, VCEK cert chain shapes, ReportDataInput freshness probe) | `src/noise/attestation.ts`, `src/cli/inspect-attestation.ts` | `16-11-2026-attestation-finding.md` |
+
+Test coverage: **82 tests**, all green on `master`.
+
+## Pending
+
+| Item | Why it's not done | Gating event |
+|---|---|---|
+| Second `HatchClient` in the pool (true pool, not just multiplex on one) | No throughput complaint on single-client multiplex | Observed muse rate-limit per-WS, or genuine concurrency ceiling |
+| Pool-scoped `/chat/subscribe` + `/client/register-capabilities` (avoid N subscribes per N main-chat callers) | No server-side rejection seen | Muse ever disconnecting over too many subscribes |
+| AMD SEV-SNP hard verification (ECDSA-P384 VCEK → ASK → ARK + CRL + sigstore/cloudflare transparency proof) | Parser is ready, but muse currently serves `Platform: NON_TEE` — nothing to verify. See `memory/16-11-2026-attestation-finding.md` | Muse flipping to `AMD_SEV_SNP` evidence |
+| Confirm `ReportDataInput.x25519_public_key == server static rs` | Needs one more capture with the updated dump (which now records `server_static_pub_b64`) | User runs `DUMP_ATTESTATION=1 npm start` once + `npm run inspect:attestation` |
+| Tokenizer-accurate counts for Claude vocab | `cl100k_base` is close enough and SDK side ignores exact count | Real complaint from an Anthropic client |
+| Proxy-side multi-turn conversation state | Agent holds server-side memory via your real Meta account; flatten works | User reporting lost context between calls |
+| Vision / image input on Anthropic path | Not sure muse accepts image parts on `/chat/stream` input | Captured example of muse accepting one |
+
+## Blocked externally
+
+- **AMD SEV-SNP evidence** — muse is sending `Platform: NON_TEE` bundles. The infra here is ready for the day they flip, but today there is literally no signed report to verify. See `memory/16-11-2026-attestation-finding.md`.
+
+## When you resume
+
+1. `git pull` and skim this file.
+2. `npm install`, `npx playwright install chromium`, `npm run login`.
+3. `npm start`, hit `/healthz`, you're back.
+4. Check the latest memory entry for context on what was last in flight.
