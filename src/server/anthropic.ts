@@ -118,13 +118,16 @@ export function registerAnthropic(app: Hono, deps: AnthropicDeps): void {
       const push = (t: string) => { queue.push({ t: "text", v: t }); onPush?.(); };
       const pushPres = (p: PresentationEvent) => { queue.push({ t: "pres", v: p }); onPush?.(); };
       let runError: Error | null = null;
+      let finalReplyText = "";
       const run = deps.runChat(userText, push, sKey, c.req.raw.signal, pushPres)
+        .then((result) => { finalReplyText = result.replyText; })
         .catch((e: unknown) => { runError = e instanceof Error ? e : new Error(String(e)); })
         .finally(() => { done = true; onPush?.(); });
 
       let outputTokens = 0;
       let totalLen = 0;
       let chunkCount = 0;
+      let streamedText = "";
       while (!done || queue.length > 0) {
         while (queue.length > 0) {
           const item = queue.shift()!;
@@ -133,6 +136,7 @@ export function registerAnthropic(app: Hono, deps: AnthropicDeps): void {
             continue;
           }
           const chunk = item.v;
+          streamedText += chunk;
           outputTokens += approxTokens(chunk);
           totalLen += chunk.length;
           chunkCount++;
@@ -149,6 +153,17 @@ export function registerAnthropic(app: Hono, deps: AnthropicDeps): void {
         }
       }
       await run;
+      if (finalReplyText.startsWith(streamedText)) {
+        const suffix = finalReplyText.slice(streamedText.length);
+        if (suffix) {
+          outputTokens += approxTokens(suffix);
+          totalLen += suffix.length;
+          chunkCount++;
+          await s.writeSSE({ event: "content_block_delta", data: JSON.stringify({
+            type: "content_block_delta", index: 0, delta: { type: "text_delta", text: suffix },
+          }) });
+        }
+      }
       if (runError !== null) {
         const errMsg = (runError as Error).message;
         await s.writeSSE({ event: "content_block_delta", data: JSON.stringify({

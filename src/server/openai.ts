@@ -90,11 +90,14 @@ export function registerOpenAI(app: Hono, deps: OpenAIDeps): void {
       const push = (t: string) => { queue.push({ t: "text", v: t }); onPush?.(); };
       const pushPres = (p: PresentationEvent) => { queue.push({ t: "pres", v: p }); onPush?.(); };
       let runError: Error | null = null;
+      let finalReplyText = "";
       const run = deps.runChat(userText, push, sKey, c.req.raw.signal, pushPres)
+        .then((result) => { finalReplyText = result.replyText; })
         .catch((e: unknown) => { runError = e instanceof Error ? e : new Error(String(e)); })
         .finally(() => { done = true; onPush?.(); });
 
       let completionTokens = 0;
+      let streamedText = "";
       while (!done || queue.length > 0) {
         while (queue.length > 0) {
           const item = queue.shift()!;
@@ -106,6 +109,7 @@ export function registerOpenAI(app: Hono, deps: OpenAIDeps): void {
             continue;
           }
           const chunk = item.v;
+          streamedText += chunk;
           completionTokens += approxTokens(chunk);
           await s.writeSSE({ data: JSON.stringify({
             id, object: "chat.completion.chunk", created, model,
@@ -122,6 +126,17 @@ export function registerOpenAI(app: Hono, deps: OpenAIDeps): void {
         }
       }
       await run;
+
+      if (finalReplyText.startsWith(streamedText)) {
+        const suffix = finalReplyText.slice(streamedText.length);
+        if (suffix) {
+          completionTokens += approxTokens(suffix);
+          await s.writeSSE({ data: JSON.stringify({
+            id, object: "chat.completion.chunk", created, model,
+            choices: [{ index: 0, delta: { content: suffix }, finish_reason: null }],
+          }) });
+        }
+      }
 
       if (runError !== null) {
         // Emit an error chunk before the stop chunk so informed clients can detect it.

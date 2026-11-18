@@ -47,27 +47,42 @@ test("SessionStore enforces max entries", () => {
   assert.ok(s.size() <= 2);
 });
 
+test("SessionStore serializes work for same session and overlaps different sessions", async () => {
+  const store = new SessionStore();
+  const events: string[] = [];
+  const work = (key: string, label: string) => store.runExclusive(key, async () => {
+    events.push(`${label}:start`);
+    await new Promise((resolve) => setTimeout(resolve, 20));
+    events.push(`${label}:end`);
+  });
+  await Promise.all([work("same", "a"), work("same", "b"), work("other", "c")]);
+  assert.ok(events.indexOf("a:end") < events.indexOf("b:start") || events.indexOf("b:end") < events.indexOf("a:start"));
+  assert.ok(events.indexOf("c:start") < events.indexOf("a:end") || events.indexOf("c:start") < events.indexOf("b:end"));
+});
+
 test("sendAndCollectReply writes session_id + metadata into stream body when sessionState provided", async () => {
-  const nowMs = Date.now();
+  let nextSid = 0n;
   let captured: Record<string, unknown> | undefined;
   const mockClient = {
     request: (_v: string, path: string, body?: unknown) => {
       if (path === "/chat/stream") captured = body as Record<string, unknown>;
-      return 1n;
+      return ++nextSid;
     },
     hasResponded: () => true,
-    async recvOne() {
-      const ev = { ts_ms: nowMs + 10, event: "delta.message_done", payload: { transcript: { messages: [{ content: [{ type: "text", text: "ok" }] }] } } };
-      await new Promise((r) => setTimeout(r, 1));
-      return { kind: "event" as const, streamId: 1n, obj: ev as Record<string, unknown> };
+    async recvOne(sid: bigint) {
+      if (sid === 2n) return { kind: "complete" as const, streamId: sid, status: 200, body: { message_id: "sent-1" } };
+      if (sid > 2n) return { kind: "complete" as const, streamId: sid, status: 200, body: { result: { chat_events: [
+        { event_name: "message.user", message_id: "sent-1" },
+        { event_name: "message.assistant", display_text: "ok" },
+      ] } } };
+      return null;
     },
-    async close() {},
   };
   await sendAndCollectReply({
     client: mockClient as unknown as import("../src/hatch/client.js").HatchClient,
     userText: "hi",
     timezone: "UTC",
-    listenMs: 2000,
+    listenMs: 3000,
     sessionState: { sessionId: "sess-A", nodeId: "n1", lastUsed: Date.now() },
   });
   assert.ok(captured);

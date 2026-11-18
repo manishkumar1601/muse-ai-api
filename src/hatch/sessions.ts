@@ -11,6 +11,7 @@ export interface ChatSessionState {
 
 export class SessionStore {
   private readonly map = new Map<string, ChatSessionState>();
+  private readonly tails = new Map<string, Promise<void>>();
   constructor(
     private readonly ttlMs = 24 * 60 * 60 * 1000,
     private readonly maxEntries = 1000,
@@ -30,6 +31,20 @@ export class SessionStore {
   }
 
   size(): number { return this.map.size; }
+
+  async runExclusive<T>(key: string, fn: () => Promise<T>): Promise<T> {
+    const previous = this.tails.get(key) ?? Promise.resolve();
+    let release!: () => void;
+    const tail = new Promise<void>((resolve) => { release = resolve; });
+    this.tails.set(key, tail);
+    await previous;
+    try {
+      return await fn();
+    } finally {
+      release();
+      if (this.tails.get(key) === tail) this.tails.delete(key);
+    }
+  }
 
   private sweep(): void {
     const now = Date.now();

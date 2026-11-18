@@ -86,3 +86,15 @@ test("/v1/chat/completions stream emits SSE chunks", async () => {
   assert.ok(text.includes('"finish_reason":"stop"'), "should have finish_reason stop");
   assert.ok(text.includes("[DONE]"), "should end with [DONE]");
 });
+
+test("/v1/chat/completions stream uses final reply when deltas are missing", async () => {
+  const app = createApp({
+    runChat: async () => ({ replyText: "complete answer", messageId: "final-id" }),
+  });
+  const res = await app.request("/v1/chat/completions", {
+    method: "POST", headers: { "Content-Type": "application/json" },
+    body: JSON.stringify({ stream: true, messages: [{ role: "user", content: "hi" }] }),
+  });
+  const text = await res.text();
+  assert.ok(text.includes("complete answer"));
+});

@@ -64,3 +64,15 @@ test("POST /v1/messages stream emits event: message_start / content_block_delta 
   assert.ok(text.includes("event: message_delta"));
   assert.ok(text.includes("event: message_stop"));
 });
+
+test("POST /v1/messages stream uses final reply when deltas are missing", async () => {
+  const app = createApp({
+    runChat: async () => ({ replyText: "complete answer", messageId: "final-id" }),
+  });
+  const res = await app.request("/v1/messages", {
+    method: "POST", headers: { "Content-Type": "application/json" },
+    body: JSON.stringify({ stream: true, messages: [{ role: "user", content: "hi" }] }),
+  });
+  const text = await res.text();
+  assert.ok(text.includes('"text":"complete answer"'));
+});

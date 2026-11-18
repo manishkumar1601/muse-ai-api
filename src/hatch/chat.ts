@@ -53,6 +53,13 @@ export interface SendAndCollectResult {
   presentations: PresentationEvent[];
 }
 
+export class MuseChatTimeoutError extends Error {
+  constructor(message: string) {
+    super(message);
+    this.name = "MuseChatTimeoutError";
+  }
+}
+
 export async function sendAndCollectReply(
   args: SendAndCollectArgs,
 ): Promise<SendAndCollectResult> {
@@ -96,13 +103,15 @@ export async function sendAndCollectReply(
   const textParts: string[] = [];
   let ackMessageId: string | undefined;
   const deadline = Date.now() + args.listenMs;
+  let stopAckWait = false;
+  let completed = false;
 
   // Background ack waiter on sendSid. Multiplex: sendSid delivers the sync-ack
   // complete; subscribeSid delivers the streamed events. Independent reads.
   const ackP = (async () => {
-    while (!args.signal?.aborted && !ackMessageId && Date.now() < deadline) {
+    while (!args.signal?.aborted && !stopAckWait && !ackMessageId && Date.now() < deadline) {
       if (sendSid === null) { await new Promise((r) => setTimeout(r, 20)); continue; }
-      const r = await args.client.recvOne(sendSid, 60_000);
+      const r = await args.client.recvOne(sendSid, Math.min(1500, deadline - Date.now()));
       if (r === null) continue;
       if (r === "closed") return;
       if (r.kind === "complete") {
@@ -131,7 +140,7 @@ export async function sendAndCollectReply(
 
     const obj = r.obj;
     const tsMs = obj["ts_ms"];
-    if (typeof tsMs === "number" && tsMs < sendStartMs) continue;
+    if (typeof tsMs === "number" && tsMs < sendStartMs - 5000) continue;
 
     events.push(obj);
     const ev = obj["event"] as string;
@@ -149,29 +158,21 @@ export async function sendAndCollectReply(
       textParts.push(text);
       args.onDelta?.(text);
     } else if (ev === "delta.message_done") {
-      if (textParts.length === 0) {
-        const transcript = payload["transcript"] as Record<string, unknown> | undefined;
-        const messages = (transcript?.["messages"] ?? []) as Record<string, unknown>[];
-        for (const m of messages) {
-          const content = (m["content"] ?? []) as Record<string, unknown>[];
-          for (const c of content) {
-            if (c["type"] === "text" && typeof c["text"] === "string") {
-              textParts.push(c["text"] as string);
-            }
-          }
-        }
-      }
+      const transcriptText = extractTranscriptText(payload);
+      if (transcriptText) appendFinalText(transcriptText, textParts, args.onDelta);
+      completed = true;
       break outer;
     } else if (ev === "message.assistant") {
-      if (textParts.length === 0) {
-        const t = (payload["display_text"] ?? payload["content"] ?? "") as string;
-        if (t) { textParts.push(t); args.onDelta?.(t); }
-      }
+      const t = (payload["display_text"] ?? payload["content"] ?? "") as string;
+      if (t) appendFinalText(t, textParts, args.onDelta);
+      completed = true;
       break outer;
     }
   }
 
+  stopAckWait = true;
   await ackP;
+  if (!completed && !args.signal?.aborted) throw new MuseChatTimeoutError("Timed out waiting for complete Muse reply");
   return { replyText: textParts.join(""), messageId: ackMessageId ?? randomUUID(), events, presentations };
 }
 
@@ -194,9 +195,9 @@ async function sideChatSendAndPoll(
 
   // Wait for the sync ack (gives us message_id).
   let ackMessageId: string | undefined;
-  const ackDeadline = Date.now() + 10_000;
+  const ackDeadline = Date.now() + args.listenMs;
   while (!ackMessageId && !args.signal?.aborted && Date.now() < ackDeadline) {
-    const r = await args.client.recvOne(sendSid, Math.max(100, ackDeadline - Date.now()));
+    const r = await args.client.recvOne(sendSid, Math.min(1500, Math.max(1, ackDeadline - Date.now())));
     if (r === null) continue;
     if (r === "closed") break;
     if (r.kind === "complete") {
@@ -208,7 +209,7 @@ async function sideChatSendAndPoll(
     }
   }
   if (!ackMessageId) {
-    return { replyText: "", messageId: randomUUID(), events: [], presentations: [] };
+    throw new MuseChatTimeoutError("Timed out waiting for Muse chat acknowledgement");
   }
 
   // Poll /chat/history until the assistant reply is STABLE (same text in two
@@ -223,7 +224,7 @@ async function sideChatSendAndPoll(
     const pollDeadline = Math.min(Date.now() + 3000, deadline);
     let currentText: string | null = null;
     while (!args.signal?.aborted && Date.now() < pollDeadline) {
-      const r = await args.client.recvOne(sid, Math.max(100, pollDeadline - Date.now()));
+      const r = await args.client.recvOne(sid, Math.min(1500, Math.max(1, pollDeadline - Date.now())));
       if (r === null) continue;
       if (r === "closed") break;
       if (r.kind === "complete") {
@@ -235,7 +236,6 @@ async function sideChatSendAndPoll(
             if (e["event_name"] !== "message.assistant") continue;
             if (typeof e["display_text"] !== "string") continue;
             currentText = e["display_text"] as string;
-            break;
           }
         }
         break;
@@ -259,6 +259,28 @@ async function sideChatSendAndPoll(
     }
     await new Promise((r) => setTimeout(r, 800));
   }
-  // ponytail: side-chat path has no subscribe stream → presentations are never captured here.
+  if (!args.signal?.aborted) throw new MuseChatTimeoutError("Timed out waiting for complete Muse reply");
   return { replyText: lastText ?? "", messageId: ackMessageId, events: [], presentations: [] };
+}
+
+function extractTranscriptText(payload: Record<string, unknown>): string {
+  const transcript = payload["transcript"] as Record<string, unknown> | undefined;
+  const messages = (transcript?.["messages"] ?? []) as Record<string, unknown>[];
+  return messages.flatMap((message) => {
+    const content = (message["content"] ?? []) as Record<string, unknown>[];
+    return content.flatMap((block) => block["type"] === "text" && typeof block["text"] === "string" ? [block["text"] as string] : []);
+  }).join("");
+}
+
+function appendFinalText(
+  finalText: string,
+  textParts: string[],
+  onDelta?: (chunk: string) => void,
+): void {
+  const streamedText = textParts.join("");
+  if (finalText.startsWith(streamedText)) {
+    const suffix = finalText.slice(streamedText.length);
+    if (suffix) onDelta?.(suffix);
+  }
+  textParts.splice(0, textParts.length, finalText);
 }
