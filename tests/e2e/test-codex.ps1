@@ -1,5 +1,5 @@
 # E2E: current Codex CLI against the proxy via the Responses API.
-# Prereqs (see README §5a):
+# Prereqs (see README section 5a):
 #   - proxy running (npm start)
 #   - [model_providers.muse] with wire_api = "responses" in ~/.codex/config.toml
 #   - profile file ~/.codex/muse.config.toml (model + model_provider)
