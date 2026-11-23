@@ -126,7 +126,35 @@ claude
 
 Close the shell → Claude Code reverts to your real Anthropic account.
 
-### 5. Use with Codex / OpenAI SDK / Continue.dev / any OpenAI-compatible client
+### 5a. Use with Codex CLI (current versions)
+
+Current Codex only speaks the OpenAI **Responses API** (`wire_api = "chat"` was removed upstream) and ignores `OPENAI_BASE_URL` — it must be configured in `config.toml`. The proxy serves `POST /v1/responses` for exactly this.
+
+Add the provider to `%USERPROFILE%\.codex\config.toml` (or `$CODEX_HOME\config.toml`):
+
+```toml
+[model_providers.muse]
+name = "Muse Proxy"
+base_url = "http://127.0.0.1:8787/v1"
+env_key = "OPENAI_API_KEY"
+wire_api = "responses"
+```
+
+Then either make it your default (`model = "muse-spark"` + `model_provider = "muse"` at the top of `config.toml`), or keep your normal Codex account as default and add a profile — profiles live in their **own file**, `%USERPROFILE%\.codex\muse.config.toml`:
+
+```toml
+model = "muse-spark"
+model_provider = "muse"
+```
+
+```powershell
+$env:OPENAI_API_KEY = "anything"
+codex --profile muse "reply with exactly: codex-ok"
+```
+
+Plain `codex` still uses your logged-in account — nothing is logged out or overwritten. (A "Model metadata for muse-spark not found" warning from Codex is expected and harmless.) Note the proxy is stateless for Responses: Codex already resends the full conversation each turn, and tool definitions are ignored — the Muse agent runs its own tools server-side and answers in text.
+
+### 5b. Use with OpenAI SDK / Continue.dev / any Chat-Completions client
 
 ```bash
 export OPENAI_BASE_URL=http://127.0.0.1:8787/v1
@@ -136,7 +164,7 @@ export OPENAI_MODEL=muse-spark
 export OPENAI_DEFAULT_HEADERS='{"X-Muse-Session":"my-project-name"}'
 ```
 
-Then run `codex`, your Python `openai` client, your IDE plugin — anything that respects `OPENAI_BASE_URL` will hit the proxy.
+Anything that respects `OPENAI_BASE_URL` will hit the proxy.
 
 **Python example**:
 

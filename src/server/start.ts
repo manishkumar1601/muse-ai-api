@@ -7,6 +7,7 @@ import type { Config } from "../config.js";
 import { loadConfig } from "../config.js";
 import { logRequest } from "./middleware.js";
 import { registerOpenAI } from "./openai.js";
+import { registerResponses } from "./responses.js";
 import { registerAnthropic } from "./anthropic.js";
 import { runChat as realRunChat, resetPool } from "./handler.js";
 import { anthropicError, openaiError } from "./errors.js";
@@ -42,6 +43,7 @@ export function createApp(deps?: AppDeps): Hono {
   }));
   app.get("/healthz", (c) => c.json({ ok: true }));
   registerOpenAI(app, { cfg, runChat });
+  registerResponses(app, { cfg, runChat });
   registerAnthropic(app, { cfg, runChat });
   app.notFound((c) => isAnthropicPath(c.req.path)
     ? anthropicError(c, 404, "not_found_error", "not found")

@@ -4,8 +4,13 @@
 
 ```
 POST  /v1/chat/completions   stream + non-stream
+POST  /v1/responses          stream + non-stream (Responses API — for current Codex CLI)
 GET   /v1/models             returns one entry: muse-spark
 ```
+
+## Responses API (`/v1/responses`)
+
+Implemented for current Codex CLI, which only speaks this protocol (`wire_api = "chat"` was removed upstream). `instructions` becomes the system prompt; `input` (string or item array) is flattened like chat messages — `message` items contribute their text, `function_call` items become a one-line summary, `function_call_output` items contribute their output text, `reasoning`/`item_reference` items are skipped. Streaming emits the standard Responses event sequence (`response.created` → `response.output_text.delta` → `response.completed`, or `response.failed` on error). Stateless: `previous_response_id` is accepted but not resolved (Codex resends the full conversation each turn). Request `tools` are ignored — the Muse agent runs its own tools server-side and answers in text, so replies never contain `function_call` items. Setup: see README §5a.
 
 Auth: `Authorization: Bearer <anything>` if `MUSE_PROXY_KEY` is unset. If set, header must match.
 
