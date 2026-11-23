@@ -24,7 +24,7 @@ Middleware logs `[req ] POST /v1/chat/completions`. Handler calls `extractUserTe
 - else `Authorization` header → `a:<sha256-16>` of the bearer (dedicated per-API-key side chat)
 - else → `default` (shared main chat; backward compatible)
 
-The `SessionStore` (in-memory map, 24h sliding TTL, LRU eviction) issues a stable `{sessionId, nodeId}` per sessionKey. `sessionId` is a client-chosen UUID that first-use creates the side chat on muse; `nodeId` identifies our client across calls so muse routes replies back to us.
+The `SessionStore` (24h sliding TTL, LRU eviction, mapping persisted to `./sessions-store.json` so named sessions resume across proxy restarts) issues a stable `{sessionId, nodeId}` per sessionKey. `sessionId` is a client-chosen UUID that first-use creates the side chat on muse; `nodeId` identifies our client across calls so muse routes replies back to us.
 
 ## 2. Pool checkout (fresh Noise session on first request only)
 

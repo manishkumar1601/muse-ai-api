@@ -216,7 +216,9 @@ Everything else: [docs/troubleshooting.md](docs/troubleshooting.md).
 - 15+ live DAEMON HTTP endpoints discovered: `/healthz`, `/health` (big VM state blob), `/version`, `/feed`, `/ideas`, `/goals`, `/connectors`, `/model`, `/identity`, `/approvals`, `/chat/history`, `/chat/subscribe`, `/chat/stream`, …
 - Human-user chat: `POST /chat/stream` with proper subscribe+register preamble, streamed `delta.text_append` events reassembled into a final reply.
 - **Per-API-session side chats** — pass `X-Muse-Session: <any-string>` and the proxy creates a dedicated side chat on muse.ai for that key, continues it on subsequent calls, isolates history from other sessions. Omit the header and the proxy derives a side chat from your API token instead; omit both header and token → shared main chat. Session names are routing labels, not secrets — anyone with your proxy key who guesses a name shares that side chat. See [docs/architecture.md §2a](docs/architecture.md) and [memory/05-10-2026-side-chat-routing.md](memory/05-10-2026-side-chat-routing.md).
-- OpenAI `/v1/chat/completions` (stream + non-stream) and Anthropic `/v1/messages` (stream + non-stream) wire formats.
+- OpenAI `/v1/chat/completions` and `/v1/responses` (stream + non-stream) and Anthropic `/v1/messages` (stream + non-stream) wire formats. The Responses endpoint is what current Codex CLI speaks.
+- **Per-agent helper scripts** (`scripts/use-with-*.ps1` / `.sh`) for Claude Code, Codex, OpenCode, Aider and generic OpenAI clients — shell-scoped, cross-platform (Windows / Linux / macOS), never touching the agent's own account. See §5c.
+- **Resumable named sessions** — pass a session name to any helper script (or an `X-Muse-Session` header) and the same muse.ai side chat is resumed across terminal closes and proxy restarts; the mapping persists in `sessions-store.json`. See §6.
 - Automatic session re-bootstrap on first HatchClient open failure.
 - **Multiplex-pool HatchClient** — one Noise handshake amortized across all requests; concurrent requests multiplex over a single WS via per-stream dispatch. First caller pays ~500 ms handshake; the rest overlap. Closes + reopens on error.
 - **Token counts** via `js-tiktoken` (`cl100k_base` encoder) on `usage` for both OpenAI and Anthropic, stream + non-stream. Accurate for GPT-4-family, close-enough for Claude. Chars/4 fallback if the encoder fails to load.
@@ -230,7 +232,7 @@ Everything else: [docs/troubleshooting.md](docs/troubleshooting.md).
 - Multi-turn conversation threading is server-side only. The proxy flattens your `messages[]` into a single prompt per request.
 - Token counts use `cl100k_base` — accurate for OpenAI clients, approximate for Anthropic (Claude's vocab differs). Hatch itself exposes no tokenizer; this is a client-side estimate.
 - Pool multiplexes over one HatchClient; opening a second client is not implemented (if muse ever rate-limits per-WS we would need a client-set here).
-- Only tested on Windows 11 + Node 22. Most things should work elsewhere.
+- Developed on Windows 11 + Node 22; the proxy also runs on Linux, and the helper scripts are written for Windows PowerShell, bash and zsh (Linux/macOS) and were exercised under all three shells. macOS itself has not had a full end-to-end run yet.
 
 ## Non-obvious things I discovered the hard way
 

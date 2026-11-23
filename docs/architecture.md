@@ -79,7 +79,7 @@ Payloads larger than 48KB are automatically split across multiple NoiseTransport
 - else `Authorization: Bearer <token>` → `a:<sha256-16>` → dedicated per-API-key side chat.
 - else → `default` → shared main chat (no `session_id` sent, backward compatible).
 
-`sessionId` is a client-chosen UUID generated once per key; first `/chat/stream` with that id creates the side chat on muse, subsequent uses continue it.
+`sessionId` is a client-chosen UUID generated once per key; first `/chat/stream` with that id creates the side chat on muse, subsequent uses continue it. The mapping is **persisted to `./sessions-store.json`** (`MUSE_SESSIONS_STORE_PATH`; atomic write, mode 0600, flushed on shutdown), so a named session resumes the same side chat after a proxy restart — see README §6.
 
 ### 3. Noise transport (`src/noise/`)
 
@@ -113,5 +113,5 @@ The Hono server is async-native. Hatch work runs inside an async flow with strea
 
 ## State
 
-- **Persistent across runs:** `~/.ssh/*` (your git keys), `./storage_state.json` (your muse.ai cookies), `./session.json` (last-bootstrapped tokens).
+- **Persistent across runs:** `~/.ssh/*` (your git keys), `./storage_state.json` (your muse.ai cookies), `./session.json` (last-bootstrapped tokens), `./sessions-store.json` (session-name → side-chat mappings, for resume).
 - **Rebuilt per run:** everything else. Noise keys are per-handshake; stream_ids per-connection; the WS session is per-pool-lifetime (lazily opened on first request; closed + reopened on error).
