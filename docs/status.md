@@ -1,6 +1,6 @@
 # Project status
 
-**Last updated:** 2026-11-16
+**Last updated:** 2026-11-23
 
 One table, two columns: what's shipped, what isn't yet. If you're picking the project up on a new machine or after a break, start here.
 
@@ -22,8 +22,11 @@ One table, two columns: what's shipped, what isn't yet. If you're picking the pr
 | Multiplex-pool HatchClient (per-stream dispatcher, concurrent requests on one WS, lazy-open mutex) | `src/hatch/pool.ts`, `src/hatch/client.ts`, `src/hatch/chat.ts` | `16-11-2026-multiplex-pool.md` |
 | Attestation dump (`DUMP_ATTESTATION=1 → attestation-dump.json`) | `src/hatch/client.ts` | `16-11-2026-attestation-finding.md` |
 | Attestation parser + `inspect:attestation` CLI (AMD SEV-SNP report, VCEK cert chain shapes, ReportDataInput freshness probe) | `src/noise/attestation.ts`, `src/cli/inspect-attestation.ts` | `16-11-2026-attestation-finding.md` |
+| Missing / truncated reply fix — `MuseChatTimeoutError` on timeout or missing ack instead of an empty reply, final transcript / message text merged via `appendFinalText` / `extractTranscriptText` without duplication or truncation, 1.5 s `recvOne` slices, 5 s replay-filter tolerance | `src/hatch/chat.ts`, `src/server/handler.ts` | Commit `7c0d9d4` (2026-11-18), direct to `master` (no PR) |
+| Per-session serialization — `SessionStore.runExclusive` wraps `runChat` so calls on the same session run one at a time; `MuseChatTimeoutError` is not retried / re-bootstrapped | `src/hatch/sessions.ts`, `src/server/handler.ts` | Commit `7c0d9d4` (2026-11-18) |
+| Streaming suffix flush — any final reply text not yet streamed is emitted as a last chunk before finish on both protocol paths | `src/server/openai.ts`, `src/server/anthropic.ts` | Commit `7c0d9d4` (2026-11-18) |
 
-Test coverage: **82 tests**, all green on `master`.
+Test coverage: **82 tests**, all green on `master` as of 2026-11-16. The 2026-11-18 fix updated `tests/chat.test.ts`, `tests/sessions.test.ts`, `tests/server-openai.test.ts` and `tests/server-anthropic.test.ts` — total count not re-verified in this docs-only update.
 
 ## Pending
 
