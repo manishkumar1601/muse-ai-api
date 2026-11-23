@@ -13,7 +13,30 @@ function loadSession(path: string): Session {
   return JSON.parse(readFileSync(path, "utf-8")) as Session;
 }
 
-export const chatSessions = new SessionStore();
+// Lazily created so the store path comes from the loaded config / .env
+// (module imports evaluate before index.ts loads .env). The store is
+// persisted to disk: a named session resumes its muse.ai side chat even
+// after the proxy restarts. Keyed by path: a caller with a different
+// configured path gets a store for THAT path, never a stale one.
+let _chatSessions: SessionStore | null = null;
+let _chatSessionsPath: string | null = null;
+export function getChatSessions(cfg: Config): SessionStore {
+  if (!_chatSessions || _chatSessionsPath !== cfg.sessionsStorePath) {
+    _chatSessions = new SessionStore(24 * 60 * 60 * 1000, 1000, cfg.sessionsStorePath);
+    _chatSessionsPath = cfg.sessionsStorePath;
+  }
+  return _chatSessions;
+}
+
+export function resetChatSessions(): void {
+  _chatSessions?.flush();
+  _chatSessions = null;
+  _chatSessionsPath = null;
+}
+
+export function flushChatSessions(): void {
+  _chatSessions?.flush();
+}
 
 // ponytail: module-level pool — one HatchClient reused across requests, serialized.
 // Saves the ~500ms Noise handshake on every request after the first. Caveat: main-chat
@@ -46,8 +69,9 @@ export async function runChat(
   signal?: AbortSignal,
   onPresentation?: (p: PresentationEvent) => void,
 ): Promise<{ replyText: string; messageId: string; presentations: PresentationEvent[] }> {
-  const state = sessionKey === DEFAULT_SESSION_KEY ? undefined : chatSessions.get(sessionKey);
-  return chatSessions.runExclusive(sessionKey, async () => {
+  const sessions = getChatSessions(cfg);
+  const state = sessionKey === DEFAULT_SESSION_KEY ? undefined : sessions.get(sessionKey);
+  return sessions.runExclusive(sessionKey, async () => {
     const p = getPool(cfg);
     // Set once sendAndCollectReply has been entered: from that point the
     // user's message may already have been posted upstream, so a failure

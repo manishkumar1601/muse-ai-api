@@ -24,7 +24,7 @@ $env:ANTHROPIC_DEFAULT_OPUS_MODEL   = "muse-spark"
 $env:ANTHROPIC_DEFAULT_SONNET_MODEL = "muse-spark"
 $env:ANTHROPIC_DEFAULT_HAIKU_MODEL  = "muse-spark"
 $env:CLAUDE_CODE_SUBAGENT_MODEL     = "muse-spark"
-$env:ENABLE_TOOL_SEARCH             = "true"
+$env:ENABLE_TOOL_SEARCH             = "true"   # optional Claude Code setting, unrelated to the proxy (not set by the helper scripts)
 
 # One-shot
 "" | claude -p "your prompt here"

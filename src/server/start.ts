@@ -9,7 +9,7 @@ import { logRequest } from "./middleware.js";
 import { registerOpenAI } from "./openai.js";
 import { registerResponses } from "./responses.js";
 import { registerAnthropic } from "./anthropic.js";
-import { runChat as realRunChat, resetPool } from "./handler.js";
+import { runChat as realRunChat, resetPool, flushChatSessions } from "./handler.js";
 import { anthropicError, openaiError } from "./errors.js";
 import type { PresentationEvent } from "../hatch/chat.js";
 
@@ -78,6 +78,7 @@ export async function start(cfg: Config): Promise<() => Promise<void>> {
     process.exit(1);
   });
   return async () => {
+    flushChatSessions();
     await resetPool().catch(() => {});
     await new Promise<void>((resolve) => {
       server.close(() => resolve());

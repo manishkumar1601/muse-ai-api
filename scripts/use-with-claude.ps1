@@ -10,6 +10,13 @@
 
 param([string]$Session = "")
 
+# Session names become header values / token parts downstream; keep them
+# to a safe charset so they can never corrupt a header or a config file.
+if ($Session -and $Session -notmatch '^[A-Za-z0-9._-]+$') {
+  Write-Host "Session name '$Session' is not allowed - use only letters, digits, dot, underscore and hyphen." -ForegroundColor Red
+  return
+}
+
 # Respect a customised proxy port/model if the user set them.
 $port  = if ($env:MUSE_PROXY_PORT)  { $env:MUSE_PROXY_PORT }  else { "8787" }
 $model = if ($env:MUSE_PROXY_MODEL) { $env:MUSE_PROXY_MODEL } else { "muse-spark" }
@@ -25,6 +32,7 @@ $env:CLAUDE_CODE_SUBAGENT_MODEL     = $model
 if ($Session) {
   $env:ANTHROPIC_CUSTOM_HEADERS = "X-Muse-Session: $Session"
   Write-Host "Claude Code -> muse proxy (side chat: $Session). Just run: claude" -ForegroundColor Green
+  Write-Host "  Reuse the same session name in a new shell to resume this chat."
 } else {
   # Clear any side-chat header left over from a previous dot-source in
   # this shell -- otherwise we'd claim "main chat" while still routing

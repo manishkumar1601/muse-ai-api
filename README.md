@@ -109,18 +109,10 @@ Isolated per-project side chat (recommended — keeps muse.ai threads separate):
 claude
 ```
 
-**Bash / zsh**:
+**Bash / zsh** (Linux + macOS — use the bundled helper, must be sourced):
 
 ```bash
-export ANTHROPIC_BASE_URL=http://127.0.0.1:8787
-export ANTHROPIC_AUTH_TOKEN=anything
-export ANTHROPIC_MODEL=muse-spark
-export ANTHROPIC_DEFAULT_OPUS_MODEL=muse-spark
-export ANTHROPIC_DEFAULT_SONNET_MODEL=muse-spark
-export ANTHROPIC_DEFAULT_HAIKU_MODEL=muse-spark
-export CLAUDE_CODE_SUBAGENT_MODEL=muse-spark
-# Optional, per-project side chat (uncomment to use):
-# export ANTHROPIC_CUSTOM_HEADERS="X-Muse-Session: my-project-name"
+. ./scripts/use-with-claude.sh            # or: . ./scripts/use-with-claude.sh my-project-name
 claude
 ```
 
@@ -130,7 +122,16 @@ Close the shell → Claude Code reverts to your real Anthropic account.
 
 Current Codex only speaks the OpenAI **Responses API** (`wire_api = "chat"` was removed upstream) and ignores `OPENAI_BASE_URL` — it must be configured in `config.toml`. The proxy serves `POST /v1/responses` for exactly this.
 
-Add the provider to `%USERPROFILE%\.codex\config.toml` (or `$CODEX_HOME\config.toml`):
+**Easy way — the bundled helper** (keeps your normal Codex login untouched; it uses a separate `CODEX_HOME` at `~/.codex-muse` and generates a config there for you — the provider block below, plus `model`/`model_provider` defaults at the top):
+
+```powershell
+. .\scripts\use-with-codex.ps1            # Windows; then run: codex
+```
+```bash
+. ./scripts/use-with-codex.sh             # Linux/macOS; then run: codex
+```
+
+**Manual way** — add the provider to `%USERPROFILE%\.codex\config.toml` (or `$CODEX_HOME\config.toml`):
 
 ```toml
 [model_providers.muse]
@@ -176,6 +177,28 @@ print(client.chat.completions.create(
     messages=[{"role":"user","content":"hello"}],
 ).choices[0].message.content)
 ```
+
+### 5c. All coding agents — one helper script each (Windows + Linux + macOS)
+
+Every agent gets a matched pair of scripts in `scripts/`. All of them are **shell-scoped**: they change no global settings, never touch the agent's own logged-in account or config, and closing the shell reverts the routing. (Two of them also write a small config file into their own dedicated folder — `~/.codex-muse/config.toml` for Codex, `~/.muse-proxy/opencode.json` for OpenCode — which simply sits unused once the shell is closed.) Each takes an optional **session name** — see §6 for why that matters (resume).
+
+| Agent | Windows (PowerShell) | Linux / macOS (bash/zsh) | Then run |
+|---|---|---|---|
+| Claude Code | `. .\scripts\use-with-claude.ps1 [name]` | `. ./scripts/use-with-claude.sh [name]` | `claude` |
+| Codex | `. .\scripts\use-with-codex.ps1 [name]` | `. ./scripts\use-with-codex.sh [name]` | `codex` |
+| OpenCode | `. .\scripts\use-with-opencode.ps1 [name]` | `. ./scripts\use-with-opencode.sh [name]` | `opencode` |
+| Aider | `. .\scripts\use-with-aider.ps1 [name]` | `. ./scripts\use-with-aider.sh [name]` | `aider --model openai/muse-spark` |
+| Any OpenAI-compatible client | `. .\scripts\use-with-openai.ps1 [name]` | `. ./scripts\use-with-openai.sh [name]` | your client |
+
+### 6. Resuming an existing chat
+
+A conversation lives in a **named side chat** on muse.ai. The name is how you get back to it:
+
+1. Start a chat with a session name, e.g. `. .\scripts\use-with-claude.ps1 my-project` (or `use-with-codex`, `use-with-opencode`, … — same idea on every agent).
+2. Close the terminal, reboot, come back tomorrow — it doesn't matter.
+3. Run the same script with **the same name** again and keep talking. The agent reconnects to the same muse.ai side chat with its full history — the model remembers what you discussed.
+
+How it works: the name travels as the `X-Muse-Session` header (or, for agents that can't send headers like Codex/Aider, inside the API token as `proxy-<name>`). The proxy maps the name to the muse.ai chat and **persists that mapping to `sessions-store.json`** (see `MUSE_SESSIONS_STORE_PATH`), so resume survives proxy restarts too. Mappings expire after 24h of inactivity. To forget all of them and start fresh: stop the proxy, delete `sessions-store.json`, restart (a running proxy keeps the mappings in memory and would rewrite the file). Different name = different chat; no name = one default chat shared by every agent (they all present the same `proxy` token when unnamed — use names when you want chats kept apart).
 
 ### Troubleshooting (quick)
 

@@ -77,7 +77,7 @@ export function responsesInputToMessages(body: ResponsesBody): ChatMessage[] {
       messages.push({ role: "assistant", content: `[called tool ${name} with arguments ${args}]` });
     } else if (it.type === "function_call_output") {
       const callId = typeof it.call_id === "string" ? it.call_id : "unknown_call";
-      messages.push({ role: "user", content: `[tool result for ${callId}]\n${contentText(it.output) || (typeof it.output === "string" ? it.output : "")}` });
+      messages.push({ role: "user", content: `[tool result for ${callId}]\n${contentText(it.output)}` });
     } else if (it.type === "reasoning" || it.type === "item_reference") {
       continue; // no user-visible text to forward
     } else {
@@ -110,6 +110,7 @@ function responseObject(args: {
   id: string;
   model: string;
   status: "in_progress" | "completed" | "failed";
+  createdAt: number;
   replyText?: string;
   itemId?: string;
   usage?: { input_tokens: number; output_tokens: number; total_tokens: number };
@@ -129,7 +130,7 @@ function responseObject(args: {
   return {
     id,
     object: "response",
-    created_at: Math.floor(Date.now() / 1000),
+    created_at: args.createdAt,
     status,
     model,
     output,
@@ -165,6 +166,9 @@ export function registerResponses(app: Hono, deps: ResponsesDeps): void {
     const stream = body.stream === true;
     const sKey = sessionKeyFromReq(c);
     const inputTokens = approxTokens(userText);
+    // One created_at for the whole response: every event for a given
+    // response id must carry the same timestamp.
+    const createdAt = Math.floor(Date.now() / 1000);
 
     if (!stream) {
       let r: { replyText: string; messageId: string; presentations?: PresentationEvent[] };
@@ -180,6 +184,7 @@ export function registerResponses(app: Hono, deps: ResponsesDeps): void {
         ...responseObject({
           id: `resp_${r.messageId}`,
           model,
+          createdAt,
           status: "completed",
           replyText: r.replyText,
           itemId: `msg_${r.messageId}`,
@@ -198,10 +203,10 @@ export function registerResponses(app: Hono, deps: ResponsesDeps): void {
       };
 
       await send("response.created", {
-        response: responseObject({ id: respId, model, status: "in_progress" }),
+        response: responseObject({ id: respId, model, status: "in_progress", createdAt }),
       });
       await send("response.in_progress", {
-        response: responseObject({ id: respId, model, status: "in_progress" }),
+        response: responseObject({ id: respId, model, status: "in_progress", createdAt }),
       });
       await send("response.output_item.added", {
         output_index: 0,
@@ -246,7 +251,7 @@ export function registerResponses(app: Hono, deps: ResponsesDeps): void {
         logger.warn({ err: errMsg }, "responses stream: runChat error");
         await send("response.failed", {
           response: {
-            ...responseObject({ id: respId, model, status: "failed" }),
+            ...responseObject({ id: respId, model, status: "failed", createdAt }),
             error: { code: "server_error", message: errMsg },
           },
         });
@@ -282,7 +287,7 @@ export function registerResponses(app: Hono, deps: ResponsesDeps): void {
       });
       await send("response.completed", {
         response: responseObject({
-          id: respId, model, status: "completed",
+          id: respId, model, status: "completed", createdAt,
           replyText: streamedText, itemId,
           usage: { input_tokens: inputTokens, output_tokens: outputTokens, total_tokens: inputTokens + outputTokens },
         }),

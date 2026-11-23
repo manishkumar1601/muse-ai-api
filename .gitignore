@@ -1,5 +1,6 @@
 # Secrets — session cookies, auth tokens, decrypted frames
 **/session.json
+**/sessions-store.json*
 **/storage_state.json
 **/cookies.json
 **/events.json
