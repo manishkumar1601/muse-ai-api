@@ -9,7 +9,7 @@ POST  /v1/messages/count_tokens   returns a cl100k_base (GPT-4) token count — 
 
 Auth: `x-api-key: <anything>` or `Authorization: Bearer <anything>` if `MUSE_PROXY_KEY` is unset.
 
-**Side-chat routing (optional):** pass `X-Muse-Session: <any-string>` to route the request to a dedicated side chat on muse.ai. Two requests with the same value share one side chat; different values get separate side chats. Omit → main chat. If no header is set, the proxy derives a session key from the `Authorization` bearer token (or `x-api-key`) so distinct API keys get distinct side chats automatically.
+**Side-chat routing (optional):** pass `X-Muse-Session: <any-string>` to route the request to a dedicated side chat on muse.ai. Two requests with the same value share one side chat; different values get separate side chats. If no header is set, the proxy derives a session key from the `Authorization` bearer token (or `x-api-key`) so distinct API keys get distinct side chats automatically. Note: with a key set (as in every example here), omitting the header still gives you a key-keyed side chat, not the main chat — the shared main chat is used only when neither the header nor any key is sent.
 
 ## Claude Code — the main use case
 
@@ -134,7 +134,7 @@ curl -N http://127.0.0.1:8787/v1/messages \
   "content": [{"type": "text", "text": "..."}],
   "stop_reason": "end_turn",
   "stop_sequence": null,
-  "usage": {"input_tokens": 0, "output_tokens": 0}
+  "usage": {"input_tokens": 12, "output_tokens": 34}
 }
 ```
 

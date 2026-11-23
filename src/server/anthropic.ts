@@ -4,7 +4,9 @@ import { streamSSE } from "hono/streaming";
 import type { Hono } from "hono";
 import type { Config } from "../config.js";
 import { requireAuth } from "./auth.js";
-import { approxTokens, flattenMessages, sessionKeyFromReq } from "./common.js";
+import { approxTokens, flattenMessages, sessionKeyFromReq, systemText, validateChatBody } from "./common.js";
+import { anthropicError, upstreamStatus } from "./errors.js";
+import { logger } from "../log.js";
 import type { ChatMessage } from "./common.js";
 import type { PresentationEvent } from "../hatch/chat.js";
 
@@ -29,45 +31,51 @@ export function registerAnthropic(app: Hono, deps: AnthropicDeps): void {
   const { cfg } = deps;
 
   app.post("/v1/messages/count_tokens", async (c) => {
-    const deny = requireAuth(c, cfg.proxyKey);
+    const deny = requireAuth(c, cfg.proxyKey, "anthropic");
     if (deny) return deny;
 
-    let body: { messages?: ChatMessage[]; system?: string };
+    let body: { messages?: ChatMessage[]; system?: unknown };
     try {
       body = await c.req.json();
     } catch {
-      return c.json({ error: { type: "invalid_request", message: "invalid JSON body" } }, 400);
+      return anthropicError(c, 400, "invalid_request_error", "invalid JSON body");
     }
 
-    const parts: string[] = [];
-    for (const m of body.messages ?? []) {
-      if (typeof m.content === "string") parts.push(m.content);
-      else for (const b of m.content) if (b.text) parts.push(b.text);
-    }
-    if (typeof body.system === "string") parts.push(body.system);
+    const invalid = validateChatBody(body, { requireMessages: true });
+    if (invalid) return anthropicError(c, 400, "invalid_request_error", invalid);
 
-    return c.json({ input_tokens: approxTokens(parts.join("\n")) });
+    // Count exactly what /v1/messages would send: same system handling,
+    // same flattenMessages markers and joins.
+    const messages: ChatMessage[] = [...(body.messages ?? [])];
+    const sys = systemText(body.system);
+    if (sys.length > 0) messages.unshift({ role: "system", content: sys });
+
+    return c.json({ input_tokens: approxTokens(flattenMessages(messages)) });
   });
 
   app.post("/v1/messages", async (c) => {
-    const deny = requireAuth(c, cfg.proxyKey);
+    const deny = requireAuth(c, cfg.proxyKey, "anthropic");
     if (deny) return deny;
 
-    let body: { model?: string; messages?: ChatMessage[]; system?: string; stream?: boolean; max_tokens?: number };
+    let body: { model?: string; messages?: ChatMessage[]; system?: unknown; stream?: boolean; max_tokens?: number };
     try {
       body = await c.req.json();
     } catch {
-      return c.json({ error: { type: "invalid_request", message: "invalid JSON body" } }, 400);
+      return anthropicError(c, 400, "invalid_request_error", "invalid JSON body");
     }
 
-    const messages: ChatMessage[] = body.messages ?? [];
-    if (typeof body.system === "string" && body.system.length > 0) {
-      messages.unshift({ role: "system", content: body.system });
+    const invalid = validateChatBody(body);
+    if (invalid) return anthropicError(c, 400, "invalid_request_error", invalid);
+
+    const messages: ChatMessage[] = [...(body.messages ?? [])];
+    const sys = systemText(body.system);
+    if (sys.length > 0) {
+      messages.unshift({ role: "system", content: sys });
     }
 
     const userText = flattenMessages(messages);
     if (!userText.trim()) {
-      return c.json({ error: { type: "invalid_request", message: "no non-empty user message" } }, 400);
+      return anthropicError(c, 400, "invalid_request_error", "no non-empty user message");
     }
 
     const model = body.model ?? cfg.model;
@@ -80,7 +88,7 @@ export function registerAnthropic(app: Hono, deps: AnthropicDeps): void {
         r = await deps.runChat(userText, undefined, sKey, c.req.raw.signal);
       } catch (e) {
         const msg = e instanceof Error ? e.message : String(e);
-        return c.json({ error: { type: "service_unavailable", message: msg } }, 503);
+        return anthropicError(c, upstreamStatus(e), "api_error", msg);
       }
       const it = approxTokens(userText);
       const ot = approxTokens(r.replyText);
@@ -137,7 +145,6 @@ export function registerAnthropic(app: Hono, deps: AnthropicDeps): void {
           }
           const chunk = item.v;
           streamedText += chunk;
-          outputTokens += approxTokens(chunk);
           totalLen += chunk.length;
           chunkCount++;
           dbg("delta", { len: chunk.length, preview: chunk.slice(0, 60) });
@@ -153,24 +160,30 @@ export function registerAnthropic(app: Hono, deps: AnthropicDeps): void {
         }
       }
       await run;
-      if (finalReplyText.startsWith(streamedText)) {
+      if (runError !== null) {
+        // Protocol error event — never inject the error as assistant text,
+        // and do not follow it with end_turn / message_stop success events.
+        const errMsg = (runError as Error).message;
+        logger.warn({ err: errMsg }, "anthropic stream: runChat error");
+        await s.writeSSE({ event: "error", data: JSON.stringify({
+          type: "error", error: { type: "api_error", message: errMsg },
+        }) });
+        dbg("done", { totalLen, chunkCount, err: errMsg });
+        return;
+      }
+      if (finalReplyText && finalReplyText.startsWith(streamedText)) {
         const suffix = finalReplyText.slice(streamedText.length);
         if (suffix) {
-          outputTokens += approxTokens(suffix);
           totalLen += suffix.length;
           chunkCount++;
           await s.writeSSE({ event: "content_block_delta", data: JSON.stringify({
             type: "content_block_delta", index: 0, delta: { type: "text_delta", text: suffix },
           }) });
         }
+      } else if (finalReplyText && streamedText && finalReplyText !== streamedText) {
+        logger.warn("anthropic stream: final reply diverges from streamed text; keeping streamed text");
       }
-      if (runError !== null) {
-        const errMsg = (runError as Error).message;
-        await s.writeSSE({ event: "content_block_delta", data: JSON.stringify({
-          type: "content_block_delta", index: 0,
-          delta: { type: "text_delta", text: `\n[proxy error: ${errMsg}]` },
-        }) });
-      }
+      outputTokens = approxTokens(finalReplyText || streamedText);
 
       await s.writeSSE({ event: "content_block_stop", data: JSON.stringify({ type: "content_block_stop", index: 0 }) });
       await s.writeSSE({ event: "message_delta", data: JSON.stringify({

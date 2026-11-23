@@ -2,7 +2,7 @@ import { z } from "zod";
 
 const Schema = z.object({
   MUSE_PROXY_HOST:         z.string().default("127.0.0.1"),
-  MUSE_PROXY_PORT:         z.coerce.number().int().positive().default(8787),
+  MUSE_PROXY_PORT:         z.coerce.number().int().min(1).max(65535).default(8787),
   MUSE_PROXY_KEY:          z.string().optional(),
   MUSE_PROXY_MODEL:        z.string().default("muse-spark"),
   MUSE_SESSION_PATH:       z.string().default("./session.json"),
@@ -19,9 +19,11 @@ export interface Config {
 
 export function loadConfig(env: Record<string, string | undefined> = process.env): Config {
   const parsed = Schema.parse(env);
+  // An empty / whitespace-only key means "no key" — never a key nobody can match.
+  const proxyKey = parsed.MUSE_PROXY_KEY?.trim() ? parsed.MUSE_PROXY_KEY.trim() : undefined;
   return {
     host: parsed.MUSE_PROXY_HOST, port: parsed.MUSE_PROXY_PORT,
-    proxyKey: parsed.MUSE_PROXY_KEY, model: parsed.MUSE_PROXY_MODEL,
+    proxyKey, model: parsed.MUSE_PROXY_MODEL,
     sessionPath: parsed.MUSE_SESSION_PATH, storageStatePath: parsed.MUSE_STORAGE_STATE_PATH,
     timezone: parsed.MUSE_TZ, logLevel: parsed.LOG_LEVEL,
   };

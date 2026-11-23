@@ -78,10 +78,7 @@ You used verb `GET`. Use `POST`.
 
 **Cause:** Claude Code probes `/v1/messages/count_tokens` before every send. If the proxy returns 404, Claude Code hangs.
 
-**Fix:** Our server already includes a stub in `src/server/openai.ts` / `src/server/anthropic.ts`. If you forked and removed it, add it back:
-```ts
-app.post("/v1/messages/count_tokens", (c) => c.json({ input_tokens: 1 }));
-```
+**Fix:** Our server already implements it in `src/server/anthropic.ts` (a real `cl100k_base` count of the same flattened prompt `/v1/messages` would send). If you forked and removed it, restore that route — Claude Code needs a 200 with `{input_tokens: <number>}`.
 
 ## Claude Code gets WebSocket CLOSE_NOTIFY
 
@@ -96,21 +93,17 @@ for (let i = 0; i < srBytes.length || parts.length === 0; i += MAX_CHUNK_PAYLOAD
 
 PowerShell doesn't support `<` for stdin redirection. Use `"" | claude ...` to pipe empty stdin, or `cmd /c "claude -p '...' < nul"`.
 
-## `npm run sweep -- "/path"` sends `C:/Program Files/Git/`
-
-Git Bash expands bare `/` to the MSYS root. Use PowerShell for probes with path arguments, or quote carefully.
-
 ## cycletls default UA is macOS Chrome
 
-When using cycletls without an explicit `userAgent`, it may default to a macOS UA. Our code overrides to Windows Chrome 154 explicitly. If you captured cookies from macOS, change the UA to match your actual browser or you'll 403.
+When using cycletls without an explicit `userAgent`, it may default to a macOS UA. Our code overrides to Windows Chrome 154 explicitly. If you captured cookies from macOS, set `MUSE_UA` (and `MUSE_PLATFORM='"macOS"'`) to match your actual browser or you'll 403 — see `.env.example`.
 
 ## Our subscribe stream parses the first server response as an event and fails
 
 The subscribe endpoint's first frame is a `response` (HTTP 200), not a `body_chunk`. Our `_recvOne` handles both; make sure you didn't accidentally treat `response` frames as JSON events.
 
-## session.json works for 5 minutes then everything 401s
+## session.json stops working after a while, then everything 401s
 
-Normal — the EdDSA auth_token has a short TTL. Rerun `npm run bootstrap` or let the server auto-rebootstrap (it tries once on first failure).
+Normal — the EdDSA auth_token is short-lived (on the order of a few hours). The server auto-rebootstraps once on the first failure; if that fails because the login cookies in `storage_state.json` have also expired, re-run `npm run login` (see the canonical recovery flow in `docs/security.md`).
 
 ## `ssh git@github.com: Permission denied (publickey)` when pushing
 

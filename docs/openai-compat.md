@@ -9,7 +9,7 @@ GET   /v1/models             returns one entry: muse-spark
 
 Auth: `Authorization: Bearer <anything>` if `MUSE_PROXY_KEY` is unset. If set, header must match.
 
-**Side-chat routing (optional):** pass `X-Muse-Session: <any-string>` to route the request to a dedicated side chat on muse.ai. Two requests with the same value share one side chat; different values get separate side chats. Omit → main chat. If no header is set, the proxy also derives a session key from `Authorization: Bearer <token>` so distinct API keys get distinct side chats automatically.
+**Side-chat routing (optional):** pass `X-Muse-Session: <any-string>` to route the request to a dedicated side chat on muse.ai. Two requests with the same value share one side chat; different values get separate side chats. If no header is set, the proxy derives a session key from `Authorization: Bearer <token>` so distinct API keys get distinct side chats automatically — so with a token set (as in every example here), omitting the header still gives you a token-keyed side chat, not the main chat. The shared main chat is used only when neither the header nor any token is sent.
 
 ## Point an OpenAI SDK at it
 
@@ -118,11 +118,11 @@ export OPENAI_API_KEY=anything
     "message": {"role": "assistant", "content": "..."},
     "finish_reason": "stop"
   }],
-  "usage": {"prompt_tokens": 0, "completion_tokens": 0, "total_tokens": 0}
+  "usage": {"prompt_tokens": 12, "completion_tokens": 34, "total_tokens": 46}
 }
 ```
 
-Token counts are always zero (Hatch doesn't surface them).
+Token counts are real `cl100k_base` (GPT-4 tokenizer, via `js-tiktoken`) counts of the flattened prompt and the reply — Hatch doesn't surface counts, so the proxy computes them locally. Exact for GPT-4-family accounting, approximate for Claude.
 
 ## Response shape — stream
 

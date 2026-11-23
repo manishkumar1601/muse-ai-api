@@ -99,7 +99,13 @@ export class HatchClient {
   // Lets callers wait for a long-lived subscribe to attach before firing dependent requests.
   private readonly _responded = new Set<bigint>();
 
-  hasResponded(streamId: bigint): boolean { return this._responded.has(streamId); }
+  // One-shot: consuming the flag also frees it, so the set does not grow
+  // for the whole lifetime of a pooled client.
+  hasResponded(streamId: bigint): boolean {
+    const had = this._responded.has(streamId);
+    if (had) this._responded.delete(streamId);
+    return had;
+  }
 
   // Inbound message queue drained by the dispatcher.
   private readonly _msgQueue: Uint8Array[] = [];
@@ -130,7 +136,17 @@ export class HatchClient {
     _tls: CycleTLSClient,
   ): Promise<HatchClient> {
     const ws = await HatchClient._connect(session.ws_url);
+    try {
+      return await HatchClient._handshake(ws, session);
+    } catch (e) {
+      // Never leak an open socket on a failed handshake — the pool's
+      // retries would otherwise pile up orphaned connections.
+      try { ws.close(); } catch { /* ignore */ }
+      throw e;
+    }
+  }
 
+  private static async _handshake(ws: MinWs, session: Session): Promise<HatchClient> {
     const hs = new XxInitiator();
 
     // msg1: e-pub (32 B) + encryptAndHash(payload). Payload = protobuf field-1 wrap of 32-byte nonce.
@@ -148,7 +164,9 @@ export class HatchClient {
       const rs = hs.peekRemoteStatic();
       const dump = {
         ts: new Date().toISOString(),
-        ws_url: session.ws_url,
+        // The full ws_url carries live auth/notary tokens as query
+        // params — never write those to disk, even in a debug dump.
+        ws_url: session.ws_url.split("?")[0] + "?<redacted>",
         msg1_nonce_b64: b64(nonce),
         msg1_raw_b64: b64(msg1),
         msg2_raw_b64: b64(msg2raw),
@@ -168,7 +186,7 @@ export class HatchClient {
     const kickCt = send.encrypt(new Uint8Array(), new Uint8Array());
     ws.send(kickCt);
 
-    logger.debug({ url: session.ws_url }, "hatch: noise handshake complete");
+    logger.debug({ url: session.ws_url.split("?")[0] }, "hatch: noise handshake complete");
     return new HatchClient(ws, send, recv);
   }
 
@@ -262,7 +280,16 @@ export class HatchClient {
 
   private async _runDispatcher(): Promise<void> {
     while (!this._closed) {
-      const r = await this._processOneRaw();
+      let r: RecvEvent | null | "closed";
+      try {
+        r = await this._processOneRaw();
+      } catch (e) {
+        // One bad frame must never kill the dispatcher permanently and
+        // leave a zombie client in the pool — fail closed instead.
+        logger.warn({ err: e instanceof Error ? e.message : String(e) }, "hatch: dispatcher error, closing client");
+        this._wsCloseFlag = true;
+        break;
+      }
       if (r === "closed") break;
       if (r === null) continue;
       const sid = r.streamId;
@@ -286,13 +313,17 @@ export class HatchClient {
     if (data === null)     return null;
     if (data === "closed") return "closed";
 
-    // Decrypt.
+    // Decrypt. A failed AEAD decrypt leaves our receive nonce behind the
+    // server's send nonce, so every later frame would fail too — this is
+    // fatal, not skippable. Fail closed so the pool discards this client.
     let pt: Uint8Array;
     try {
       pt = this._recv.decrypt(new Uint8Array(), data);
     } catch {
-      logger.debug("hatch: decrypt failed, skipping frame");
-      return null;
+      logger.warn("hatch: decrypt failed — nonce desync, closing client");
+      this._wsCloseFlag = true;
+      try { this._ws.close(); } catch { /* ignore */ }
+      return "closed";
     }
 
     // Parse NoiseTransportFrame.
@@ -308,8 +339,18 @@ export class HatchClient {
     const total      = Number(tx.total_chunks ?? 1);
     const payload    = tx.payload ?? new Uint8Array();
 
+    // Validate framing before trusting it for reassembly.
+    if (!Number.isInteger(total) || total < 1 || !Number.isInteger(chunkIndex) || chunkIndex < 0 || chunkIndex >= total) {
+      logger.warn({ chunkId, chunkIndex, total }, "hatch: invalid chunk framing, dropping frame");
+      return null;
+    }
+
     // Reassemble multi-chunk frames.
     let asm = this._assemblies.get(chunkId);
+    if (asm && asm.total !== total) {
+      logger.warn({ chunkId, have: asm.total, got: total }, "hatch: inconsistent total_chunks, dropping frame");
+      return null;
+    }
     if (!asm) {
       asm = { chunks: new Map(), total };
       this._assemblies.set(chunkId, asm);
@@ -329,11 +370,13 @@ export class HatchClient {
     asm.chunks.set(chunkIndex, payload);
     if (asm.chunks.size < asm.total) return null;
 
-    // All chunks present — concatenate in index order.
+    // Require every index present — a count match with a gap (duplicate
+    // index) would otherwise silently corrupt the payload.
     const parts: Uint8Array[] = [];
     for (let i = 0; i < asm.total; i++) {
-      // ponytail: fallback to empty — total verified above, so gap shouldn't occur.
-      parts.push(asm.chunks.get(i) ?? new Uint8Array());
+      const part = asm.chunks.get(i);
+      if (part === undefined) return null;
+      parts.push(part);
     }
     const full = HatchClient._concat(parts);
     this._assemblies.delete(chunkId);
@@ -373,7 +416,7 @@ export class HatchClient {
       if (r.end_body) {
         const raw  = HatchClient._concat(b.body);
         this._streamBodies.delete(streamId);
-        const body = raw.length ? JSON.parse(new TextDecoder().decode(raw)) : {};
+        const body = HatchClient._parseBody(raw);
         return { kind: "complete", streamId, status: b.status, body };
       }
       return null;
@@ -404,7 +447,7 @@ export class HatchClient {
       if (bc.end_body) {
         const raw  = HatchClient._concat(b.body);
         this._streamBodies.delete(streamId);
-        const body = raw.length ? JSON.parse(new TextDecoder().decode(raw)) : {};
+        const body = HatchClient._parseBody(raw);
         return { kind: "complete", streamId, status: b.status, body };
       }
       return null;
@@ -420,6 +463,20 @@ export class HatchClient {
   }
 
   // ---- internal helpers ----
+
+  /** Parse a completed stream body. Non-JSON bodies (HTML/text error
+   *  pages) must not throw — that would kill the dispatcher. They are
+   *  surfaced as { _raw_text } so callers can still inspect them. */
+  private static _parseBody(raw: Uint8Array): unknown {
+    if (!raw.length) return {};
+    const text = new TextDecoder().decode(raw);
+    try {
+      return JSON.parse(text) as unknown;
+    } catch {
+      logger.warn({ preview: text.slice(0, 120) }, "hatch: non-JSON response body");
+      return { _raw_text: text };
+    }
+  }
 
   /** Concatenate Uint8Array parts without Buffer. */
   private static _concat(parts: Uint8Array[]): Uint8Array {
@@ -438,12 +495,18 @@ export class HatchClient {
       });
       ws.binaryType = "arraybuffer";
 
+      const timer = setTimeout(() => {
+        cleanup();
+        try { ws.close(); } catch { /* ignore */ }
+        reject(new Error("WebSocket connect timed out (10s)"));
+      }, 10_000);
       const onOpen  = () => { cleanup(); resolve(ws); };
       const onError = (ev: { message?: string }) => {
         cleanup();
         reject(new Error(`WebSocket connect failed: ${ev.message ?? "unknown"}`));
       };
       const cleanup = () => {
+        clearTimeout(timer);
         ws.removeEventListener("open",  onOpen);
         ws.removeEventListener("error", onError);
       };
@@ -456,6 +519,10 @@ export class HatchClient {
   /** Receive one binary WS frame during the handshake (before the message queue is attached). */
   private static _wsRecv(ws: MinWs): Promise<Uint8Array> {
     return new Promise((resolve, reject) => {
+      const timer = setTimeout(() => {
+        cleanup();
+        reject(new Error("timed out waiting for handshake message (15s)"));
+      }, 15_000);
       const onMsg   = (ev: { data: unknown }) => { cleanup(); resolve(toBytes(ev.data)); };
       const onClose = () => { cleanup(); reject(new Error("WS closed during handshake")); };
       const onError = (ev: { message?: string }) => {
@@ -463,6 +530,7 @@ export class HatchClient {
         reject(new Error(`WS error during handshake: ${ev.message ?? ""}`));
       };
       const cleanup = () => {
+        clearTimeout(timer);
         ws.removeEventListener("message", onMsg);
         ws.removeEventListener("close",   onClose);
         ws.removeEventListener("error",   onError);

@@ -171,7 +171,15 @@ export async function sendAndCollectReply(
   }
 
   stopAckWait = true;
-  await ackP;
+  if (completed && !ackMessageId) {
+    // The reply is already complete — don't add up to ~1.5s of dead time
+    // waiting for an ack that only supplies the message id (we fall back
+    // to a random id). Give it a short grace period, then move on; the
+    // waiter exits on its next loop iteration via stopAckWait.
+    await Promise.race([ackP, new Promise((r) => setTimeout(r, 250))]);
+  } else {
+    await ackP;
+  }
   if (!completed && !args.signal?.aborted) throw new MuseChatTimeoutError("Timed out waiting for complete Muse reply");
   return { replyText: textParts.join(""), messageId: ackMessageId ?? randomUUID(), events, presentations };
 }
@@ -218,7 +226,8 @@ async function sideChatSendAndPoll(
   const path = `/chat/history?limit=40&transcript_mode=messages&session_id=${sessionId}`;
   const deadline = Date.now() + args.listenMs;
   let lastText: string | null = null;
-  let emittedLen = 0;
+  let emittedText = "";
+  let deltaDiverged = false;
   while (!args.signal?.aborted && Date.now() < deadline) {
     const sid = args.client.request("GET", path);
     const pollDeadline = Math.min(Date.now() + 3000, deadline);
@@ -243,13 +252,22 @@ async function sideChatSendAndPoll(
     }
     dbg("poll", { len: currentText?.length ?? null, lastLen: lastText?.length ?? null, preview: currentText?.slice(0, 80) ?? null });
     if (currentText !== null) {
-      if (args.onDelta && currentText.length > emittedLen) {
-        const fresh = currentText.slice(emittedLen);
-        for (let i = 0; i < fresh.length; i += 300) {
-          args.onDelta(fresh.slice(i, i + 300));
-          await new Promise((r) => setTimeout(r, 5));
+      if (args.onDelta && !deltaDiverged && currentText.length > emittedText.length) {
+        // Snapshots are assumed append-only. If a later snapshot revises
+        // text we already emitted, slicing by length would garble the
+        // stream — stop emitting deltas instead (the final replyText
+        // returned to the caller is still the correct full text).
+        if (!currentText.startsWith(emittedText)) {
+          deltaDiverged = true;
+          logger.warn("side-chat: snapshot revised already-streamed text; stopping delta emission");
+        } else {
+          const fresh = currentText.slice(emittedText.length);
+          for (let i = 0; i < fresh.length; i += 300) {
+            args.onDelta(fresh.slice(i, i + 300));
+            await new Promise((r) => setTimeout(r, 5));
+          }
+          emittedText = currentText;
         }
-        emittedLen = currentText.length;
       }
       if (lastText === currentText && currentText.length > 0) {
         dbg("stable", { len: currentText.length });
@@ -266,7 +284,15 @@ async function sideChatSendAndPoll(
 function extractTranscriptText(payload: Record<string, unknown>): string {
   const transcript = payload["transcript"] as Record<string, unknown> | undefined;
   const messages = (transcript?.["messages"] ?? []) as Record<string, unknown>[];
-  return messages.flatMap((message) => {
+  return messages
+    // If the transcript marks speakers, only the assistant's text is the
+    // reply — concatenating the user's prompt in would corrupt it.
+    // Unmarked messages (the shape in our captures/tests) are kept.
+    .filter((message) => {
+      const role = message["role"] ?? message["sender"] ?? message["author"];
+      return typeof role !== "string" || role === "assistant";
+    })
+    .flatMap((message) => {
     const content = (message["content"] ?? []) as Record<string, unknown>[];
     return content.flatMap((block) => block["type"] === "text" && typeof block["text"] === "string" ? [block["text"] as string] : []);
   }).join("");

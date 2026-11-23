@@ -101,6 +101,14 @@ export function parseReportDataInput(bytes: Uint8Array): ReportDataInput {
   const T = root.lookupType("thatch.attestation.v1.ReportDataInput");
   const msg = T.decode(bytes);
   const obj = T.toObject(msg, { bytes: Uint8Array }) as { x25519_public_key?: Uint8Array; client_nonce?: Uint8Array };
+  // A present-but-wrong-length field is a malformed bundle, not an empty
+  // one — fail loudly instead of letting a downstream equality check
+  // compare truncated bytes.
+  for (const [name, v] of [["x25519_public_key", obj.x25519_public_key], ["client_nonce", obj.client_nonce]] as const) {
+    if (v !== undefined && v.length !== 32) {
+      throw new Error(`ReportDataInput.${name} must be 32 bytes, got ${v.length}`);
+    }
+  }
   return {
     x25519_public_key: obj.x25519_public_key ?? new Uint8Array(),
     client_nonce: obj.client_nonce ?? new Uint8Array(),

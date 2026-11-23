@@ -3,7 +3,8 @@ import { streamSSE } from "hono/streaming";
 import type { Hono } from "hono";
 import type { Config } from "../config.js";
 import { requireAuth } from "./auth.js";
-import { approxTokens, flattenMessages, sessionKeyFromReq } from "./common.js";
+import { approxTokens, flattenMessages, sessionKeyFromReq, validateChatBody } from "./common.js";
+import { openaiError, upstreamStatus } from "./errors.js";
 import type { ChatMessage } from "./common.js";
 import type { PresentationEvent } from "../hatch/chat.js";
 import { logger } from "../log.js";
@@ -23,7 +24,7 @@ export function registerOpenAI(app: Hono, deps: OpenAIDeps): void {
   const { cfg } = deps;
 
   app.get("/v1/models", (c) => {
-    const deny = requireAuth(c, cfg.proxyKey);
+    const deny = requireAuth(c, cfg.proxyKey, "openai");
     if (deny) return deny;
     return c.json({
       object: "list",
@@ -32,19 +33,22 @@ export function registerOpenAI(app: Hono, deps: OpenAIDeps): void {
   });
 
   app.post("/v1/chat/completions", async (c) => {
-    const deny = requireAuth(c, cfg.proxyKey);
+    const deny = requireAuth(c, cfg.proxyKey, "openai");
     if (deny) return deny;
 
     let body: { model?: string; messages?: ChatMessage[]; stream?: boolean };
     try {
       body = await c.req.json();
     } catch {
-      return c.json({ error: { type: "invalid_request", message: "invalid JSON body" } }, 400);
+      return openaiError(c, 400, "invalid_request_error", "invalid JSON body");
     }
+
+    const invalid = validateChatBody(body);
+    if (invalid) return openaiError(c, 400, "invalid_request_error", invalid);
 
     const userText = flattenMessages(body.messages ?? []);
     if (!userText.trim()) {
-      return c.json({ error: { type: "invalid_request", message: "no non-empty user message" } }, 400);
+      return openaiError(c, 400, "invalid_request_error", "no non-empty user message");
     }
 
     const model = body.model ?? cfg.model;
@@ -57,7 +61,7 @@ export function registerOpenAI(app: Hono, deps: OpenAIDeps): void {
         r = await deps.runChat(userText, undefined, sKey, c.req.raw.signal);
       } catch (e) {
         const msg = e instanceof Error ? e.message : String(e);
-        return c.json({ error: { type: "service_unavailable", message: msg } }, 503);
+        return openaiError(c, upstreamStatus(e), "server_error", msg);
       }
       const pt = approxTokens(userText);
       const ct = approxTokens(r.replyText);
@@ -110,7 +114,6 @@ export function registerOpenAI(app: Hono, deps: OpenAIDeps): void {
           }
           const chunk = item.v;
           streamedText += chunk;
-          completionTokens += approxTokens(chunk);
           await s.writeSSE({ data: JSON.stringify({
             id, object: "chat.completion.chunk", created, model,
             choices: [{ index: 0, delta: { content: chunk }, finish_reason: null }],
@@ -127,20 +130,22 @@ export function registerOpenAI(app: Hono, deps: OpenAIDeps): void {
       }
       await run;
 
-      if (finalReplyText.startsWith(streamedText)) {
+      if (finalReplyText && finalReplyText.startsWith(streamedText)) {
         const suffix = finalReplyText.slice(streamedText.length);
         if (suffix) {
-          completionTokens += approxTokens(suffix);
           await s.writeSSE({ data: JSON.stringify({
             id, object: "chat.completion.chunk", created, model,
             choices: [{ index: 0, delta: { content: suffix }, finish_reason: null }],
           }) });
         }
+      } else if (finalReplyText && streamedText && finalReplyText !== streamedText) {
+        logger.warn("openai stream: final reply diverges from streamed text; keeping streamed text");
       }
+      completionTokens = approxTokens(finalReplyText || streamedText);
 
       if (runError !== null) {
-        // Emit an error chunk before the stop chunk so informed clients can detect it.
-        // finish_reason stays "stop" for OpenAI-client compatibility (not "error").
+        // Emit a terminal error chunk and stop — do NOT follow it with a
+        // finish_reason:"stop" chunk, which SDK consumers read as success.
         // ponytail: explicit !== null because TS CFA narrows the closure-assigned var to never with just if(runError).
         const errMsg = (runError as Error).message;
         await s.writeSSE({ data: JSON.stringify({
@@ -149,6 +154,8 @@ export function registerOpenAI(app: Hono, deps: OpenAIDeps): void {
           choices: [{ index: 0, delta: {} }],
         }) });
         logger.warn({ err: errMsg }, "openai stream: runChat error");
+        await s.writeSSE({ data: "[DONE]" });
+        return;
       }
 
       await s.writeSSE({ data: JSON.stringify({

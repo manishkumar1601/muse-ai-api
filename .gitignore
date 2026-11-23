@@ -36,6 +36,7 @@ venv/
 # Node
 node_modules/
 dist/
-.env
+.env*
 *.tsbuildinfo
 logs/
+!.env.example

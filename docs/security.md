@@ -13,6 +13,10 @@
 
 All of the above except SSH keys are in `.gitignore`. **Never commit them.** The commit history should be auditable from a public fork.
 
+**Session names are not access control.** An `X-Muse-Session` name is just a routing label: anyone who holds your `MUSE_PROXY_KEY` and guesses a name you use (e.g. one from the README examples) lands in that same side chat and can read/continue its context. If you expose the proxy beyond localhost, treat side-chat contents as shared with every key holder.
+
+**Canonical recovery flow.** If tokens expire: re-run `npm run login` — it always works. `npm run bootstrap` only refreshes `session.json` and works solely while `storage_state.json` (the login cookies) is still valid; if bootstrap fails, log in again instead of retrying it.
+
 ## What is NOT a secret
 
 - The 9 saved JS chunks under `recon/chunks/`. These are Meta's publicly served minified JS; anyone can download them. **However**, redistributing them might trip DMCA notices. We ship them for reproducibility; a hygienic fork would delete them and re-fetch from `recon/chunk_urls.txt`.

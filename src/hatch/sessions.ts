@@ -19,6 +19,10 @@ export class SessionStore {
 
   get(key: string): ChatSessionState {
     let s = this.map.get(key);
+    if (s && Date.now() - s.lastUsed > this.ttlMs) {
+      this.map.delete(key);
+      s = undefined;
+    }
     if (s) {
       this.map.delete(key);
     } else {
@@ -68,12 +72,14 @@ export const DEFAULT_SESSION_KEY = "default";
 export function deriveSessionKey(headers: {
   xMuseSession?: string | undefined;
   authorization?: string | undefined;
+  xApiKey?: string | undefined;
 }): string {
   if (headers.xMuseSession && headers.xMuseSession.trim().length > 0) {
     return `h:${headers.xMuseSession.trim()}`;
   }
-  if (headers.authorization && headers.authorization.trim().length > 0) {
-    return `a:${createHash("sha256").update(headers.authorization).digest("hex").slice(0, 16)}`;
+  const credential = headers.authorization?.trim() ? headers.authorization : headers.xApiKey;
+  if (credential && credential.trim().length > 0) {
+    return `a:${createHash("sha256").update(credential).digest("hex").slice(0, 32)}`;
   }
   return DEFAULT_SESSION_KEY;
 }

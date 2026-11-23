@@ -5,6 +5,9 @@ interface StorageState { cookies: StorageStateCookie[]; }
 
 export function loadCookies(path: string): Record<string, string> {
   const data: StorageState = JSON.parse(readFileSync(path, "utf-8"));
+  if (!data || !Array.isArray(data.cookies)) {
+    throw new Error(`storage state at ${path} has no cookies array — re-run \`npm run login\``);
+  }
   const out: Record<string, string> = {};
   for (const c of data.cookies) {
     if (typeof c.name !== "string" || typeof c.value !== "string" || typeof c.domain !== "string") continue;

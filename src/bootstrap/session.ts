@@ -67,6 +67,9 @@ async function getHtml(tls: TlsClient, path: string, cookieHeader: string): Prom
     },
     "GET",
   );
+  if (resp.status < 200 || resp.status >= 300) {
+    throw new Error(`GET ${path} → ${resp.status}`);
+  }
   return resp.body;
 }
 
@@ -77,7 +80,7 @@ export async function bootstrap(opts: {
   gatewayUrl?: string;
 }): Promise<Session> {
   if (!existsSync(opts.storageStatePath)) {
-    throw new Error(`storage_state.json not found at ${opts.storageStatePath}`);
+    throw new Error(`storage_state.json not found at ${opts.storageStatePath} — run \`npm run login\` first to create it`);
   }
 
   const cookies = loadCookies(opts.storageStatePath);
@@ -91,6 +94,7 @@ export async function bootstrap(opts: {
   let gatewayUrl = opts.gatewayUrl;
 
   if (!vmId || !gatewayUrl) {
+    let leaseError: string | undefined;
     try {
       const lease = await postJson(tls, "/api/hatch/lease-vm", { vmType: "standard" }, cookieHeader);
       if (lease["status"] === "assigned"
@@ -99,15 +103,18 @@ export async function bootstrap(opts: {
         gatewayUrl = lease["gatewayUrl"];
         vmId = lease["vmName"];
       }
-    } catch {
-      // 403 expected if VM already assigned — fall through to HTML scrape
+    } catch (e) {
+      // 403 expected if VM already assigned — fall through to HTML scrape,
+      // but keep the real error: if the scrape also fails, a 401 (expired
+      // cookies) or a network error must not be hidden behind this message.
+      leaseError = e instanceof Error ? e.message : String(e);
     }
 
     if (!vmId || !gatewayUrl) {
       const html = await getHtml(tls, "/", cookieHeader);
       const scraped = scrapeVmFromHtml(html);
       if (!scraped) {
-        throw new Error("could not resolve vm_id — lease failed and HTML has no activeGatewayUrl");
+        throw new Error(`could not resolve vm_id — lease failed${leaseError ? ` (${leaseError})` : ""} and HTML has no activeGatewayUrl`);
       }
       vmId = scraped.vmId;
       gatewayUrl = scraped.gatewayUrl;
@@ -151,6 +158,7 @@ export async function bootstrap(opts: {
     noise_suite: "Noise_XX_25519_AESGCM_SHA256",
   };
 
-  writeFileSync(opts.sessionPath, JSON.stringify(session, null, 2), "utf-8");
+  // The session file carries live tokens — owner-only permissions.
+  writeFileSync(opts.sessionPath, JSON.stringify(session, null, 2), { encoding: "utf-8", mode: 0o600 });
   return session;
 }

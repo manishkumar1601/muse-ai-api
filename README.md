@@ -55,7 +55,14 @@ git clone https://github.com/manishkumar1601/muse-ai-api.git
 cd muse-ai-api
 npm install
 npx playwright install chromium   # one-time; needed by `npm run login`
+# Linux: use `npx playwright install --with-deps chromium` so the OS
+# libraries Chromium needs are installed too.
+# Note: `npm run login` opens a real browser window — you need a desktop
+# display (it won't work over a plain SSH session without X forwarding).
 ```
+
+Optional configuration: copy `.env.example` to `.env` — the proxy loads
+it automatically at startup (shell exports take precedence).
 
 ### 2. Log in to muse.ai (one-shot)
 
@@ -83,6 +90,7 @@ Sanity check:
 ```bash
 curl http://127.0.0.1:8787/healthz   # {"ok":true}
 curl http://127.0.0.1:8787/v1/models # one model entry: muse-spark
+# (if you set MUSE_PROXY_KEY, add: -H "Authorization: Bearer <your-key>")
 ```
 
 ### 4. Use with Claude Code (scoped to the shell — won't touch your global `~/.claude` config)
@@ -111,8 +119,8 @@ export ANTHROPIC_DEFAULT_OPUS_MODEL=muse-spark
 export ANTHROPIC_DEFAULT_SONNET_MODEL=muse-spark
 export ANTHROPIC_DEFAULT_HAIKU_MODEL=muse-spark
 export CLAUDE_CODE_SUBAGENT_MODEL=muse-spark
-# Per-project side chat:
-export ANTHROPIC_CUSTOM_HEADERS="X-Muse-Session: my-project-name"
+# Optional, per-project side chat (uncomment to use):
+# export ANTHROPIC_CUSTOM_HEADERS="X-Muse-Session: my-project-name"
 claude
 ```
 
@@ -156,7 +164,7 @@ Everything else: [docs/troubleshooting.md](docs/troubleshooting.md).
 - HTTP-over-Noise ServiceFrame transport, with per-request chunking across NoiseTransportFrames (~65 KB per frame limit).
 - 15+ live DAEMON HTTP endpoints discovered: `/healthz`, `/health` (big VM state blob), `/version`, `/feed`, `/ideas`, `/goals`, `/connectors`, `/model`, `/identity`, `/approvals`, `/chat/history`, `/chat/subscribe`, `/chat/stream`, …
 - Human-user chat: `POST /chat/stream` with proper subscribe+register preamble, streamed `delta.text_append` events reassembled into a final reply.
-- **Per-API-session side chats** — pass `X-Muse-Session: <any-string>` and the proxy creates a dedicated side chat on muse.ai for that key, continues it on subsequent calls, isolates history from other sessions. Omit the header → shared main chat (backward compatible). See [docs/architecture.md §2a](docs/architecture.md) and [memory/05-10-2026-side-chat-routing.md](memory/05-10-2026-side-chat-routing.md).
+- **Per-API-session side chats** — pass `X-Muse-Session: <any-string>` and the proxy creates a dedicated side chat on muse.ai for that key, continues it on subsequent calls, isolates history from other sessions. Omit the header and the proxy derives a side chat from your API token instead; omit both header and token → shared main chat. Session names are routing labels, not secrets — anyone with your proxy key who guesses a name shares that side chat. See [docs/architecture.md §2a](docs/architecture.md) and [memory/05-10-2026-side-chat-routing.md](memory/05-10-2026-side-chat-routing.md).
 - OpenAI `/v1/chat/completions` (stream + non-stream) and Anthropic `/v1/messages` (stream + non-stream) wire formats.
 - Automatic session re-bootstrap on first HatchClient open failure.
 - **Multiplex-pool HatchClient** — one Noise handshake amortized across all requests; concurrent requests multiplex over a single WS via per-stream dispatch. First caller pays ~500 ms handshake; the rest overlap. Closes + reopens on error.

@@ -7,18 +7,26 @@
 
 param([string]$Session = "")
 
-$env:ANTHROPIC_BASE_URL             = "http://127.0.0.1:8787"
+# Respect a customised proxy port/model if the user set them.
+$port  = if ($env:MUSE_PROXY_PORT)  { $env:MUSE_PROXY_PORT }  else { "8787" }
+$model = if ($env:MUSE_PROXY_MODEL) { $env:MUSE_PROXY_MODEL } else { "muse-spark" }
+
+$env:ANTHROPIC_BASE_URL             = "http://127.0.0.1:$port"
 $env:ANTHROPIC_AUTH_TOKEN           = "anything"
-$env:ANTHROPIC_MODEL                = "muse-spark"
-$env:ANTHROPIC_DEFAULT_OPUS_MODEL   = "muse-spark"
-$env:ANTHROPIC_DEFAULT_SONNET_MODEL = "muse-spark"
-$env:ANTHROPIC_DEFAULT_HAIKU_MODEL  = "muse-spark"
-$env:CLAUDE_CODE_SUBAGENT_MODEL     = "muse-spark"
+$env:ANTHROPIC_MODEL                = $model
+$env:ANTHROPIC_DEFAULT_OPUS_MODEL   = $model
+$env:ANTHROPIC_DEFAULT_SONNET_MODEL = $model
+$env:ANTHROPIC_DEFAULT_HAIKU_MODEL  = $model
+$env:CLAUDE_CODE_SUBAGENT_MODEL     = $model
 
 if ($Session) {
   $env:ANTHROPIC_CUSTOM_HEADERS = "X-Muse-Session: $Session"
   Write-Host "✓ Claude Code -> muse proxy (side chat: $Session). Just run: claude" -ForegroundColor Green
 } else {
-  Write-Host "✓ Claude Code -> muse proxy (main chat). Just run: claude" -ForegroundColor Green
+  # Clear any side-chat header left over from a previous dot-source in
+  # this shell — otherwise we'd claim "main chat" while still routing
+  # to the old side chat.
+  Remove-Item Env:ANTHROPIC_CUSTOM_HEADERS -ErrorAction SilentlyContinue
+  Write-Host "✓ Claude Code -> muse proxy (token-keyed side chat; no X-Muse-Session). Just run: claude" -ForegroundColor Green
 }
 Write-Host "  Close this shell to revert to your global Claude account."

@@ -2,8 +2,8 @@ import { test } from "node:test";
 import assert from "node:assert/strict";
 import { approxTokens } from "../src/server/common.js";
 
-test("approxTokens returns a positive count for empty-ish strings", () => {
-  assert.equal(approxTokens(""), 1);
+test("approxTokens: empty string is 0, a single char is 1", () => {
+  assert.equal(approxTokens(""), 0);
   assert.equal(approxTokens("a"), 1);
 });
 

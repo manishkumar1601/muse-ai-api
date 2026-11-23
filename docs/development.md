@@ -23,6 +23,8 @@ muse-ai-api/
     │   ├── cipher.ts    AES-GCM encrypt/decrypt
     │   ├── curve.ts     X25519 DH helpers
     │   ├── symmetric.ts MixHash / MixKey / HKDF
+    │   ├── attestation.ts SEV-SNP bundle / ReportDataInput parsing
+    │   ├── index.ts     barrel exports
     │   └── util.ts      concat / split helpers
     ├── proto/           protobuf glue
     │   ├── loader.ts    Root.fromDescriptor() over *.binpb files
@@ -33,6 +35,8 @@ muse-ai-api/
     │   ├── transport.ts NoiseTransportFrame encode/decode + 48KB chunker
     │   ├── envelope.ts  ServiceRequest / ServiceFrame encode/decode
     │   ├── chat.ts      sendAndCollectReply (register → subscribe → stream)
+    │   ├── pool.ts      multiplex HatchClient pool
+    │   ├── sessions.ts  side-chat SessionStore + session-key derivation
     │   └── tls.ts       cycletls wrapper (getTls)
     ├── server/          Hono proxy
     │   ├── start.ts     server bootstrap, port binding
@@ -42,34 +46,23 @@ muse-ai-api/
     │   ├── auth.ts      MUSE_PROXY_KEY middleware
     │   ├── middleware.ts request/response logging
     │   ├── common.ts    shared response-shaping helpers
-    │   └── sse.ts       SSE helpers for streaming responses
+    │   └── errors.ts    protocol-correct OpenAI/Anthropic error envelopes
     └── cli/
-        └── bootstrap.ts CLI entry for `npm run bootstrap`
+        ├── bootstrap.ts CLI entry for `npm run bootstrap`
+        └── inspect-attestation.ts CLI entry for `npm run inspect:attestation`
 ```
 
 ## Set up on a fresh machine
 
-```bash
-git clone git@github.com:manishkumar1601/muse-ai-api.git
-cd muse-ai-api
-
-npm install
-
-# One-time: dump your logged-in muse.ai cookies via Playwright
-# (or any tool that produces Playwright storage_state format)
-# Save to ./storage_state.json
-
-npm run bootstrap        # produces ./session.json
-npm start                # starts proxy on 127.0.0.1:8787
-```
+Follow the **Quick Start in the README** — it is the canonical setup
+(clone → `npm install` → `npx playwright install chromium` →
+`npm run login` → `npm start`). `npm run login` is the supported way to
+produce `storage_state.json` + `session.json`; `npm run bootstrap` only
+refreshes `session.json` from an existing, still-valid `storage_state.json`.
 
 ## Adding a new DAEMON endpoint call
 
-1. Confirm the endpoint exists using the sweep script:
-   ```powershell
-   Set-Content -Path probes.json -Value '[["DAEMON","GET","/your-path",null]]' -Encoding ascii
-   npm run sweep -- --probes probes.json --listen-seconds 10
-   ```
+1. Confirm the endpoint exists by calling it through a pooled `HatchClient` from a small `tsx` script (the Python-era sweep tool was not ported; there is no `npm run sweep`).
 2. If 400, iterate on body shape — the server's error messages tell you what's missing.
 3. Add a method on `HatchClient` (or just call `client.request(verb, path, body)` directly from `src/hatch/client.ts`).
 4. If large bodies (>65KB) might be sent, no extra work needed — `request()` already chunks via `src/hatch/transport.ts`.
@@ -126,14 +119,15 @@ If Meta changes the Noise or envelope protos:
 
 ```bash
 # Download all chunks (one-time; just needs the URLs saved from last run)
-# Then run the extraction script:
-node scripts/extract-protos.mjs --chunks recon/chunks --out src/proto/schemas
+# Then extract the embedded FileDescriptorProto blobs from the chunks
+# into src/proto/schemas/*.binpb. NOTE: the Python-era extraction script
+# (scripts/extract-protos.mjs) was not ported — the descriptors in
+# recon/proto_descriptors/ and recon/proto_catalog.json are the record
+# of the last extraction; re-extraction is currently a manual step.
 
-# Verify the new binpb files load correctly:
-node -e "import('./src/proto/loader.js').then(m => m.loadPool()).then(() => console.log('ok'))"
+# Verify the binpb files load correctly:
+npm run typecheck && npm test   # tests/proto.test.ts loads every schema
 ```
-
-If a new `fileDesc("...")` form appears (different mangled call pattern), update the regex in `scripts/extract-protos.mjs`.
 
 ## Common debugging workflow
 
@@ -167,7 +161,7 @@ curl -s -X POST http://127.0.0.1:8787/v1/chat/completions \
 
 Likely-first-to-break order (most → least fragile):
 1. Chunk-id naming / hashes in `/_next/static/chunks/*.js` — `recon/chunk_urls.txt` goes stale. Just re-fetch.
-2. Mangled identifiers in the JS — `scripts/extract-protos.mjs` regex may miss some. Update regex.
+2. Mangled identifiers in the JS — proto re-extraction (currently manual, see above) may miss some descriptors.
 3. Protobuf field numbers — would invalidate `src/proto/schemas/*.binpb`. Re-extract.
 4. `/chat/stream` request body shape — add a field, remove a field. Instrument crypto, grep marker, update body.
 5. The entire Noise suite / handshake pattern — unlikely but possible. Would require `src/noise/` rewrite.

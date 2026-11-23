@@ -13,12 +13,21 @@ export interface ClientPool {
 // Multiplex pool: one HatchClient, N concurrent withClient callers. HatchClient's
 // dispatcher routes events to per-stream queues so overlapping requests don't
 // clobber each other. Only client-open is mutex'd (not request handling), so the
-// first caller pays the ~500 ms handshake and the rest reuse it. On fn error we
-// close + null the client; other in-flight callers will surface "closed" from
-// recvOne and retry via the handler's bootstrap path.
+// first caller pays the ~500 ms handshake and the rest reuse it.
+//
+// Error policy: an application-level failure from one caller (e.g. a chat
+// timeout) must NOT tear down the shared client and kill every other
+// in-flight caller — the client is only discarded for other failures,
+// where keeping it would risk handing out a zombie.
 export function createClientPool(deps: PoolDeps): ClientPool {
   let current: HatchClient | null = null;
   let opening: Promise<HatchClient> | null = null;
+
+  function isApplicationError(e: unknown): boolean {
+    if (e instanceof Error && e.name === "MuseChatTimeoutError") return true;
+    const msg = e instanceof Error ? e.message : String(e);
+    return /timed out/i.test(msg);
+  }
 
   async function getClient(): Promise<HatchClient> {
     if (current !== null) return current;
@@ -40,7 +49,7 @@ export function createClientPool(deps: PoolDeps): ClientPool {
     try {
       return await fn(c);
     } catch (e) {
-      if (current === c) {
+      if (!isApplicationError(e) && current === c) {
         await closeSafely(current);
         current = null;
       }
@@ -49,6 +58,11 @@ export function createClientPool(deps: PoolDeps): ClientPool {
   }
 
   async function reset(): Promise<void> {
+    // Wait for any in-flight open first, otherwise the opener would
+    // resurrect exactly the client reset() meant to discard.
+    if (opening !== null) {
+      try { await opening; } catch { /* failed open leaves nothing to close */ }
+    }
     await closeSafely(current);
     current = null;
   }

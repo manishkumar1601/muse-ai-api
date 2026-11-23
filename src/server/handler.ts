@@ -49,9 +49,16 @@ export async function runChat(
   const state = sessionKey === DEFAULT_SESSION_KEY ? undefined : chatSessions.get(sessionKey);
   return chatSessions.runExclusive(sessionKey, async () => {
     const p = getPool(cfg);
+    // Set once sendAndCollectReply has been entered: from that point the
+    // user's message may already have been posted upstream, so a failure
+    // must NOT be retried — a retry would post the turn a second time and
+    // re-stream a second copy of the reply. The bootstrap retry below is
+    // only for failures before send (pool open / handshake / stale session).
+    let sendAttempted = false;
     for (let attempt = 0; attempt < 2; attempt++) {
       try {
         return await p.withClient(async (client) => {
+          sendAttempted = true;
           const r = await sendAndCollectReply({
             client, userText, timezone: cfg.timezone, listenMs: 60_000,
             ...(state !== undefined ? { sessionState: state } : {}),
@@ -65,6 +72,7 @@ export async function runChat(
         const msg = e instanceof Error ? e.message : String(e);
         logger.warn({ err: msg, attempt }, "pool.withClient failed");
         if (e instanceof MuseChatTimeoutError) throw e;
+        if (sendAttempted) throw e;
         if (attempt === 0) {
           try {
             await bootstrap({ storageStatePath: cfg.storageStatePath, sessionPath: cfg.sessionPath });

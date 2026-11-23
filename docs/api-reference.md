@@ -191,15 +191,9 @@ Only `/healthz` is reachable over noise. Everything else returns 403 `path not a
 
 ## Re-probing
 
-To check if routes have changed, use the sweep script from `src/`:
-
-```bash
-npm run sweep -- --listen-seconds 15
-```
-
-To probe a specific endpoint:
-```powershell
-# PowerShell quoting of embedded JSON:
-Set-Content -Path probes.json -Value '[["DAEMON","GET","/your-path",null]]' -Encoding ascii
-npm run sweep -- --probes probes.json --listen-seconds 10
-```
+The route-sweep script from the Python era was not ported to the Node
+codebase — there is no `npm run sweep` command. To check whether routes
+have changed, call the endpoint through a pooled `HatchClient` (see
+`src/hatch/client.ts`) from a small `tsx` script, or watch what the web
+client sends in the browser's network tab and compare against
+`src/hatch/` and `src/proto/`.

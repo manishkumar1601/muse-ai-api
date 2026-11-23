@@ -6,9 +6,17 @@
 import { chromium } from "playwright";
 import { writeFileSync, existsSync } from "node:fs";
 import { randomUUID } from "node:crypto";
+import { loadConfig } from "../src/config.js";
 
-const STATE_PATH = "storage_state.json";
-const SESSION_PATH = "session.json";
+try {
+  if (existsSync(".env")) process.loadEnvFile(".env");
+} catch { /* ignore malformed .env */ }
+
+// Respect MUSE_SESSION_PATH / MUSE_STORAGE_STATE_PATH like the server does —
+// hard-coded paths here made a custom-path login invisible to the server.
+const cfg = loadConfig();
+const STATE_PATH = cfg.storageStatePath;
+const SESSION_PATH = cfg.sessionPath;
 
 const browser = await chromium.launch({ headless: false });
 const ctx = existsSync(STATE_PATH)
@@ -109,7 +117,7 @@ const session = {
   lb_host: "hatch.metaaivm.com" as const,
   noise_suite: "Noise_XX_25519_AESGCM_SHA256" as const,
 };
-writeFileSync(SESSION_PATH, JSON.stringify(session, null, 2));
+writeFileSync(SESSION_PATH, JSON.stringify(session, null, 2), { mode: 0o600 });
 
 await browser.close();
 console.log(`✓ session.json written (vm_id=${vmId})`);
