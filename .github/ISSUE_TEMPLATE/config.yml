@@ -1,0 +1,8 @@
+blank_issues_enabled: true
+contact_links:
+  - name: Documentation
+    url: https://github.com/manishkumar1601/muse-ai-api/tree/master/docs
+    about: Protocol notes, compat guides and the project status page — many questions are answered there.
+  - name: Security reports
+    url: https://github.com/manishkumar1601/muse-ai-api/blob/master/docs/security.md
+    about: Please do NOT open a public issue for security problems — follow the security policy instead.
